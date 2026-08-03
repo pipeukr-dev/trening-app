@@ -369,10 +369,12 @@ function screenHome(){
       <div class="note">${spec.reason||""}</div>
     </div>
     <div class="row"><button class="go" onclick="startFlow()" ${spec.has?"":"disabled"}>▶ Начать тренировку</button></div>
-    ${n>0?`<div class="row"><button onclick="uploadAll()">Загрузить: ${n} записей</button></div>`:""}
+    ${n>0?`<div class="row"><button onclick="uploadAll()">Загрузить: ${n} записей</button></div>
+    <div class="row"><button class="ghost" onclick="showPayload()">JSON для /import (запасной путь)</button></div>`:""}
     ${p2?`<div class="row"><button class="ghost" onclick="screenWeek()">Расписание на неделю</button></div>`:""}
     <div class="row"><button class="ghost" onclick="screenImport()">Импорт рекордов</button></div>
     <div class="row"><button class="ghost" onclick="screenLast()">Последнее занятие</button></div>
+    <div class="row"><button class="ghost" onclick="confirmReset()">Сбросить данные</button></div>
     <div class="foot note center">Занятие идёт офлайн. Загрузка — вечером.</div>`);
 }
 
@@ -777,9 +779,7 @@ function uploadAll(){
   const all=loadAttempts();
   const pending=all.filter(a=>!a.uploaded);
   if(!pending.length){toast("Нет несинхронизированных записей.");return;}
-  const c=ctx();
-  const payload={records:pending.map(stripLocal),
-    context:{club_days:[...c.club],match_days:[...c.match]}};
+  const payload=buildPayload();
   if(tg&&tg.sendData){
     tg.sendData(JSON.stringify(payload));
     // Пометим как выгруженные (не удаляем).
@@ -794,6 +794,30 @@ function uploadAll(){
   }
 }
 function stripLocal(a){const{uploaded,...rest}=a;return rest;}
+function buildPayload(){
+  const pending=loadAttempts().filter(a=>!a.uploaded);
+  const c=ctx();
+  return {records:pending.map(stripLocal),
+    context:{club_days:[...c.club],match_days:[...c.match]}};
+}
+// Запасной путь: показать JSON для отправки боту командой /import.
+function showPayload(){
+  const pending=loadAttempts().filter(a=>!a.uploaded);
+  if(!pending.length){toast("Нет несинхронизированных записей.");return;}
+  const s=JSON.stringify(buildPayload());
+  overlay(`<div class="card">
+    <div class="title">Запасной путь</div>
+    <div class="note">Отправьте боту: сначала /import, затем этот текст
+    отдельным сообщением. Или /import и текст в одной строке.</div>
+    <textarea readonly onclick="this.select()">${s.replace(/</g,"&lt;")}</textarea>
+    <div class="row"><button class="go" onclick="copyPayload('${encodeURIComponent(s)}')">Скопировать</button>
+      <button class="ghost" onclick="closeOverlay()">Готово</button></div>
+  </div>`);
+}
+function copyPayload(enc){const t=decodeURIComponent(enc);
+  if(navigator.clipboard)navigator.clipboard.writeText(t).then(
+    ()=>toast("Скопировано."),()=>toast("Выделите текст вручную."));
+  else toast("Выделите текст вручную.");}
 
 /* ================= РАСПИСАНИЕ НЕДЕЛИ (Фаза 2) ================= */
 function screenWeek(){
@@ -849,6 +873,24 @@ function screenLast(){
   }).join("");
   h(`<h1>Последнее занятие · ${last}</h1>${cards}
     <div class="row"><button class="go" onclick="screenHome()">Назад</button></div>`);
+}
+
+/* ================= СБРОС ДАННЫХ ================= */
+function confirmReset(){
+  const n=unsyncedCount();
+  overlay(`<div class="card">
+    <div class="title">Сбросить все данные?</div>
+    <div class="note">Будут удалены все попытки${n>0?` (в т.ч. ${n} невыгруженных)`:""},
+    рекорды, расписание и незавершённое занятие. Отменить нельзя.</div>
+    <div class="row"><button class="warn" onclick="resetData()">Да, стереть</button>
+      <button class="ghost" onclick="closeOverlay()">Отмена</button></div>
+  </div>`);
+}
+function resetData(){
+  ["trening_attempts","trening_records","trening_ctx","trening_session",
+   "trening_hot"].forEach(k=>localStorage.removeItem(k));
+  if(sessionTimer){clearInterval(sessionTimer);sessionTimer=null;} S=null;
+  closeOverlay(); screenHome();
 }
 
 /* ================= ВОССТАНОВЛЕНИЕ НЕЗАВЕРШЁННОГО ================= */
