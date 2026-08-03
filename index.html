@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#f7f3e8">
+<title>Тренировка</title>
+<style>
+/* Высокий контраст: тёмный текст на светлом фоне, читается на солнце. */
+:root{
+  --bg:#f7f3e8; --fg:#111; --muted:#555; --line:#c9c2ad;
+  --btn:#111; --btn-fg:#fff; --accent:#0a6b2e; --warn:#a11; --card:#fff;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
+  font-size:19px;line-height:1.35;-webkit-user-select:none;user-select:none}
+#app{max-width:520px;margin:0 auto;padding:14px;min-height:100vh;
+  display:flex;flex-direction:column}
+h1{font-size:22px;margin:.2em 0}
+h2{font-size:20px;margin:.4em 0}
+.title{font-weight:700;font-size:20px}
+.sub{color:var(--muted);font-size:16px}
+.hr{border:0;border-top:2px solid var(--line);margin:10px 0}
+.big{font-size:44px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
+button{font-size:19px;min-height:52px;border:2px solid var(--btn);
+  background:var(--btn);color:var(--btn-fg);border-radius:12px;padding:10px 14px;
+  font-weight:700;cursor:pointer;flex:1}
+button.ghost{background:transparent;color:var(--fg)}
+button.warn{background:var(--warn);border-color:var(--warn)}
+button.go{background:var(--accent);border-color:var(--accent)}
+button.small{min-height:46px;font-size:17px}
+.row{display:flex;gap:8px;margin-top:10px}
+.row3 button{flex:1}
+pre{background:#fffef8;border:2px solid var(--line);border-radius:10px;
+  padding:10px;font-family:ui-monospace,Menlo,monospace;font-size:14px;
+  overflow-x:auto;white-space:pre;line-height:1.25}
+.card{background:var(--card);border:2px solid var(--line);border-radius:12px;
+  padding:12px;margin:8px 0}
+.center{text-align:center}
+.grow{flex:1}
+.tap{flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;border:3px solid var(--btn);border-radius:16px;
+  margin:12px 0;min-height:44vh;background:#fffef8;cursor:pointer}
+.tap .num{font-size:64px;font-weight:800;font-variant-numeric:tabular-nums}
+.tap.run{background:#eaf6ec;border-color:var(--accent)}
+.name{font-size:30px;font-weight:800;letter-spacing:1px}
+.mono{font-family:ui-monospace,Menlo,monospace}
+.grid5{display:flex;gap:6px}
+.grid5 button{min-height:56px;font-size:22px}
+.gridN{display:flex;flex-wrap:wrap;gap:6px}
+.gridN button{min-height:52px;flex:1 0 26%}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;
+  align-items:center;justify-content:center;padding:18px;z-index:50}
+.overlay .card{max-width:460px;width:100%}
+.note{color:var(--muted);font-size:15px}
+.badge{display:inline-block;background:#111;color:#fff;border-radius:8px;
+  padding:2px 8px;font-size:14px;font-weight:700}
+.warnbox{background:#fff2f0;border:2px solid var(--warn);color:var(--warn);
+  border-radius:10px;padding:8px;font-weight:700}
+input[type=text],input[type=number]{font-size:24px;width:100%;padding:10px;
+  border:2px solid var(--btn);border-radius:10px;text-align:center}
+textarea{font-size:18px;width:100%;min-height:80px;padding:10px;
+  border:2px solid var(--btn);border-radius:10px}
+.foot{margin-top:auto}
+.small-actions{display:flex;gap:6px;margin-top:10px}
+.small-actions button{min-height:44px;font-size:15px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+"use strict";
+/* ================================================================
+   ТРЕНИРОВКА БРАТЬЕВ — автономное Mini App.
+   Всё занятие идёт здесь, на телефоне, без сервера.
+   Результаты копятся в localStorage. Вечером — [Загрузить] боту.
+
+   КРИТИЧЕСКОЕ ПРАВИЛО: братья никогда не сравниваются. Один игрок
+   бежит → результат зафиксирован → только потом второй. Итоги —
+   отдельными карточками. Единственное место, где имена рядом —
+   экран ввода самочувствия (это ввод, не вывод).
+   ================================================================ */
+
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+if (tg) { try { tg.ready(); tg.expand(); } catch(e){} }
+
+/* ---------- Каталог упражнений (дублирует bot/catalog.py) -------- */
+const PLAYERS = ["DANIIL","ADRIAN"];
+const RU = {DANIIL:"ДАНИИЛ", ADRIAN:"АДРИАН"};
+const CATALOG = {
+  E01:{name:"Старт-10",quality:"Скорость",type:1,stop:true,warmup:0},
+  E02:{name:"Разгон и скорость",quality:"Скорость",type:2,stop:true,warmup:0},
+  E03:{name:"Лестница",quality:"Координация",type:5,stop:false,warmup:0},
+  E04:{name:"Слалом",quality:"Ведение",type:3,stop:false,warmup:2},
+  E05:{name:"Зигзаг с мячом",quality:"Смена направления",type:3,stop:false,warmup:2},
+  E06:{name:"Челнок 5-10-5",quality:"Смена направления",type:2,stop:true,warmup:0},
+  E07:{name:"Разворот по хлопку",quality:"Завершение",type:3,stop:false,warmup:2},
+  E08_D:{name:"Ведение + удар",quality:"Завершение",type:3,stop:false,warmup:2},
+  E08_A:{name:"Ведение + удар",quality:"Завершение",type:3,stop:false,warmup:2},
+  E10:{name:"Удары · 4 серии",quality:"Удар",type:4,stop:false,warmup:0},
+  E12:{name:"Прессинг в спину",quality:"Единоборство",type:5,stop:false,warmup:0},
+  E13:{name:"Приём спиной и выход",quality:"Единоборство",type:4,stop:false,warmup:0},
+  E14:{name:"Обыгрыш лицом",quality:"Единоборство",type:5,stop:false,warmup:0},
+  E15:{name:"Выход после дальнего паса",quality:"Завершение",type:3,stop:false,warmup:2},
+  E16:{name:"Повторный рывок",quality:"Скор. выносливость",type:2,stop:false,warmup:0},
+};
+const VARIANT_RU = {stand:"СТОЯ",sit_face:"СИДЯ ЛИЦОМ",sit_back:"СИДЯ СПИНОЙ",
+  lie:"ЛЁЖА",spin:"СПИНОЙ",side:"БОКОМ"};
+const STOP_THRESHOLD = 0.15;
+
+/* ---------- Календарь (дублирует bot/schedule.py) --------------- */
+const P1_START="2026-08-03", P1_END="2026-08-19";
+const P2_START="2026-08-20", P2_END="2026-09-10";
+const CONTROL_DAYS={"2026-08-03":1,"2026-08-14":2,"2026-09-09":3};
+const TAPER_SHORT="2026-08-19", TAPER_WEEK_START="2026-08-17";
+const WD=["MON","TUE","WED","THU","FRI","SAT","SUN"];
+const WD_RU=["понедельник","вторник","среда","четверг","пятница","суббота","воскресенье"];
+const WD_SHORT=["ПН","ВТ","СР","ЧТ","ПТ","СБ","ВС"];
+const P1_MATRIX={
+  MON:["Максимальная скорость","ТЯЖЁЛЫЙ",["E01"],["E02"],["E12"]],
+  TUE:["Приём под давлением","ЛЁГКИЙ",["E04"],["E13"],["E13"]],
+  WED:["Смена направления","ТЯЖЁЛЫЙ",["E06"],["E05"],["E12"]],
+  THU:["Завершение","ЛЁГКИЙ",["E07"],["E10"],["E14"]],
+  FRI:["Отрыв и завершение","ТЯЖЁЛЫЙ",["E15"],["E16"],["E13"]],
+};
+const P2_TYPES={S:["Скорость",["E01","E02","E12"]],
+  B:["Мяч",["E04","E10","E14"]], D:["Единоборство",["E13","E12"]]};
+
+function isoToDate(s){const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);}
+function dateToIso(dt){const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,"0"),
+  d=String(dt.getDate()).padStart(2,"0");return `${y}-${m}-${d}`;}
+function addDays(iso,n){const dt=isoToDate(iso);dt.setDate(dt.getDate()+n);return dateToIso(dt);}
+function wdOf(iso){let d=isoToDate(iso).getDay();return (d+6)%7;} // 0=MON
+
+function ctx(){ // расписание клуба/матчей из localStorage
+  const raw=localStorage.getItem("trening_ctx");
+  const o=raw?JSON.parse(raw):{club_days:[],match_days:[]};
+  return {club:new Set(o.club_days||[]),match:new Set(o.match_days||[])};
+}
+function rule5applies(iso,c){
+  if(c.club.has(iso)||c.match.has(iso))return false;
+  if(c.match.has(addDays(iso,1)))return false;
+  if(c.match.has(addDays(iso,-1)))return false;
+  if(c.club.has(addDays(iso,-1))&&c.club.has(addDays(iso,-2)))return false;
+  return true;
+}
+function phase2Type(iso,c){
+  let alt=0,cur=P2_START;
+  while(cur<iso){ if(rule5applies(cur,c))alt++; cur=addDays(cur,1);}
+  if(c.club.has(iso))return[null,"Сегодня клубная тренировка. Утреннего занятия нет."];
+  if(c.match.has(iso))return[null,"Сегодня матч. Занятия нет."];
+  if(c.match.has(addDays(iso,1)))return[null,"Завтра матч. Занятия нет."];
+  if(c.match.has(addDays(iso,-1)))return["B","Вчера был матч — тип Мяч."];
+  if(c.club.has(addDays(iso,-1))&&c.club.has(addDays(iso,-2)))return["B","Два клубных дня подряд — тип Мяч."];
+  return[(alt%2===0)?"S":"D","Чередование скорость/единоборство."];
+}
+function weekOfP1(iso){return Math.floor((isoToDate(iso)-isoToDate(P1_START))/86400000/7)+1;}
+
+function determineDay(iso){
+  const wd=wdOf(iso), code=WD[wd];
+  if(CONTROL_DAYS[iso]!==undefined){
+    return {iso,phase:iso<=P1_END?1:2,week:iso<=P1_END?weekOfP1(iso):null,code,
+      day_code:`CTRL_${CONTROL_DAYS[iso]}`,goal:"Контрольный замер",load:"ТЕСТ",
+      has:true,control:true,type:null,a:["E01","E02"],b:["E08"],duel:[],
+      shortened:false,reason:"Контрольный день: тест, не тренировка."};
+  }
+  if(iso>=P1_START&&iso<=P1_END){
+    if(!P1_MATRIX[code])return noDay(iso,1,"Выходной. В Фазе 1 занятия Пн-Пт.");
+    const w=weekOfP1(iso),[goal,load,a,b,duel]=P1_MATRIX[code];
+    if(iso===TAPER_SHORT)return {iso,phase:1,week:w,code,day_code:`P1_W${w}_${code}`,
+      goal:"Подводка: старты + удары",load:"КОРОТКИЙ",has:true,control:false,type:null,
+      a:["E01"],b:["E10"],duel:[],shortened:true,reason:"30 минут."};
+    const short=iso>=TAPER_WEEK_START;
+    return {iso,phase:1,week:w,code,day_code:`P1_W${w}_${code}`,goal,load,has:true,
+      control:false,type:null,a:a.slice(),b:b.slice(),duel:duel.slice(),
+      shortened:short,reason:short?"Подводка: объём -50%.":""};
+  }
+  if(iso>=P2_START&&iso<=P2_END){
+    const c=ctx(),[t,reason]=phase2Type(iso,c);
+    if(!t)return noDay(iso,2,reason);
+    const[name,exs]=P2_TYPES[t];
+    const duel=exs.filter(e=>["E12","E13","E14"].includes(e));
+    const main=exs.filter(e=>!["E12","E13","E14"].includes(e));
+    return {iso,phase:2,week:null,code,day_code:`P2_${t}`,goal:name,load:"КОРОТКИЙ",
+      has:true,control:false,type:t,a:main.slice(0,1),b:main.slice(1),duel,
+      shortened:false,reason};
+  }
+  return noDay(iso,null,"Дата вне программы лагеря.");
+}
+function noDay(iso,phase,reason){const wd=wdOf(iso);
+  return {iso,phase,week:null,code:WD[wd],day_code:"",goal:"",load:"",has:false,
+    control:false,type:null,a:[],b:[],duel:[],shortened:false,reason};}
+
+/* ---------- Разметка коридоров ---------------------------------- */
+const MARKUP=`РАЗМЕТКА НА СЕГОДНЯ
+Коридор Д: 0 — 10 — 20 — 35
+Коридор А: 0 — 10 — 15 — 20
+Между коридорами 3 м. Отец на общем финише.`;
+
+/* ---------- Планы повторов по упражнениям ----------------------- */
+// Возвращает {DANIIL:[slot...], ADRIAN:[slot...]} где slot=
+// {variant, distance_m, is_warmup, attempt_no, rest, firstRest}
+function rep(variant,dist,n,startNo,warmup){
+  const a=[];for(let i=0;i<n;i++){a.push({variant,distance_m:dist,
+    is_warmup:(startNo+i)<=warmup,attempt_no:startNo+i});}return a;}
+function planExercise(exId,spec){
+  const hot=(localStorage.getItem("trening_hot")==="1");
+  const P={DANIIL:[],ADRIAN:[]};
+  switch(exId){
+    case "E01":
+      P.DANIIL=[...rep("stand",10,2,1,0),...rep("sit_face",10,2,3,0),
+        ...rep("lie",10,1,5,0),...rep("sit_back",10,1,6,0)];
+      P.ADRIAN=[...rep("stand",10,2,1,0),...rep("sit_back",10,3,3,0)];
+      P.DANIIL[0].firstRest=90; P.ADRIAN[0].firstRest=90; break;
+    case "E02":{
+      let biweek=(spec.iso==="2026-08-10");
+      P.DANIIL=[...rep("20m",20,3,1,0),...rep("25m_fly",35,biweek?2:3,4,0)];
+      if(biweek)P.DANIIL.push(...rep("30m_fly",40,1,6,0));
+      P.ADRIAN=[...rep("15m",15,3,1,0),...rep("20m",20,2,4,0)];
+      P.DANIIL[0].firstRest=90; P.ADRIAN[0].firstRest=90;
+      P.DANIIL.forEach(s=>{if(s.variant!=="20m")s.rest=150;}); break;}
+    case "E04":
+      P.DANIIL=rep("",15,6,1,2); P.ADRIAN=rep("",10,hot?6:8,1,2); break;
+    case "E05":
+      P.DANIIL=rep("",5,6,1,2); P.ADRIAN=rep("",4,6,1,2); break;
+    case "E06":{
+      const n=hot?2:3, dD=hot?4:5, dA=4;
+      P.DANIIL=rep("",dD,n,1,0); P.ADRIAN=rep("",dA,n,1,0); break;}
+    case "E07":
+      P.DANIIL=[...rep("spin",20,5,1,2),...rep("side",20,5,6,7)];
+      P.ADRIAN=[...rep("spin",15,5,1,2),...rep("side",15,5,6,7)]; break;
+    case "E08":
+      P.DANIIL=rep("",34,5,1,2).map(s=>({...s,ex:"E08_D"}));
+      P.ADRIAN=rep("",27,5,1,2).map(s=>({...s,ex:"E08_A"})); break;
+    case "E15":
+      P.DANIIL=rep("",35,5,1,2); P.ADRIAN=rep("",20,5,1,2); break;
+    case "E16": // только Даниил, стоп-правило не применяется
+      P.DANIIL=rep("",35,3,1,0).map(s=>({...s,rest:90})); P.ADRIAN=[]; break;
+    default: break;
+  }
+  // Отдых по умолчанию: 1 мин на каждые 10 м (мин. 45 с).
+  for(const pl of PLAYERS)for(const s of P[pl]){
+    if(s.rest===undefined)s.rest=Math.max(45,Math.round((s.distance_m||10)/10*60));
+    if(s.ex===undefined)s.ex=exId;
+  }
+  return P;
+}
+
+/* ---------- Состояние занятия ----------------------------------- */
+let S=null; // текущее занятие
+let sessionTimer=null, lastDrink=0;
+
+function loadAttempts(){return JSON.parse(localStorage.getItem("trening_attempts")||"[]");}
+function saveAttempts(a){localStorage.setItem("trening_attempts",JSON.stringify(a));}
+function records(){return JSON.parse(localStorage.getItem("trening_records")||"{}");}
+function unsyncedCount(){return loadAttempts().filter(a=>!a.uploaded).length;}
+
+function uuid(){ // простой uuid v4
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+    const r=Math.random()*16|0, v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});
+}
+function nowIso(){return new Date().toISOString();}
+
+function saveSession(){if(S)localStorage.setItem("trening_session",JSON.stringify(S));}
+function clearSession(){localStorage.removeItem("trening_session");S=null;
+  if(sessionTimer){clearInterval(sessionTimer);sessionTimer=null;}}
+
+function pushAttempt(o){
+  const a=loadAttempts();
+  const rec={uuid:uuid(),timestamp:nowIso(),date:S.spec.iso,player:o.player,
+    day_code:S.spec.day_code,exercise_id:o.ex||o.exercise_id,variant:o.variant||"",
+    attempt_no:o.attempt_no||0,is_warmup:!!o.is_warmup,
+    time_sec:(o.time_sec!==undefined&&o.time_sec!==null)?Number(o.time_sec.toFixed?o.time_sec.toFixed(2):o.time_sec):null,
+    distance_m:o.distance_m||null,control:o.control??null,goals:o.goals??null,
+    shots:o.shots??null,wellbeing:o.wellbeing??null,shortened:S.spec.shortened||S.shortened||false,
+    note:o.note||"",uploaded:false};
+  a.push(rec); saveAttempts(a); S.attempts.push(rec); saveSession();
+  return rec;
+}
+// Первое самочувствие пишется только в первую строку занятия.
+function writeWellbeing(){
+  for(const pl of PLAYERS){ if(S.wellbeing&&S.wellbeing[pl]!==undefined){
+    pushAttempt({player:pl,ex:"E00",exercise_id:"E00",wellbeing:S.wellbeing[pl],
+      note:"самочувствие"});}}
+}
+
+/* ---------- Питьевой таймер (каждые 15 минут) ------------------- */
+function startSessionClock(){
+  S.startMs=S.startMs||performance.now();
+  lastDrink=0;
+  if(sessionTimer)clearInterval(sessionTimer);
+  sessionTimer=setInterval(()=>{
+    const min=(performance.now()-S.startMs)/60000;
+    if(min>=lastDrink+15){lastDrink=Math.floor(min/15)*15;showDrink();}
+  },5000);
+}
+function showDrink(){
+  overlay(`<div class="card center">
+    <div class="title">ВОДА</div>
+    <div style="font-size:26px;margin:10px 0">150–200 мл каждому. Сейчас.</div>
+    <div class="row"><button class="go" onclick="closeOverlay()">Готово</button></div>
+  </div>`);
+}
+
+/* ---------- Рендер ---------------------------------------------- */
+const app=document.getElementById("app");
+function h(html){app.innerHTML=html;}
+function overlay(html){let o=document.getElementById("ovl");
+  if(!o){o=document.createElement("div");o.id="ovl";o.className="overlay";document.body.appendChild(o);}
+  o.innerHTML=html;}
+function closeOverlay(){const o=document.getElementById("ovl");if(o)o.remove();}
+
+/* Универсальные мелкие действия внизу экрана замера. */
+function smallActions(){
+  return `<div class="small-actions">
+    <button class="ghost small" onclick="askNote()">📝 Заметка</button>
+    <button class="ghost small" onclick="shorten()">⏱ Сократить</button>
+    <button class="ghost small" onclick="showScheme()">Схема</button>
+  </div>`;
+}
+function askNote(){
+  overlay(`<div class="card">
+    <div class="title">Заметка · к кому?</div>
+    <div class="row"><button onclick="noteFor('DANIIL')">Даниил</button>
+      <button onclick="noteFor('ADRIAN')">Адриан</button>
+      <button onclick="noteFor('')">Занятие</button></div>
+    <div class="row"><button class="ghost" onclick="closeOverlay()">Отмена</button></div>
+  </div>`);
+}
+function noteFor(pl){
+  overlay(`<div class="card">
+    <div class="title">Текст заметки</div>
+    <textarea id="nt"></textarea>
+    <div class="row"><button class="go" onclick="saveNote('${pl}')">Сохранить</button>
+      <button class="ghost" onclick="closeOverlay()">Отмена</button></div>
+  </div>`);
+}
+function saveNote(pl){
+  const t=document.getElementById("nt").value.trim();
+  if(t)pushAttempt({player:pl||"DANIIL",ex:"NOTE",exercise_id:"NOTE",note:t,
+    time_sec:null});
+  closeOverlay();
+}
+function shorten(){ // убирает часть Б, помечает shortened
+  S.shortened=true; S.spec.b=[];
+  // Пометим уже записанные попытки занятия.
+  const a=loadAttempts();a.forEach(x=>{if(x.date===S.spec.iso)x.shortened=true;});
+  saveAttempts(a); saveSession(); closeOverlay();
+  toast("Занятие сокращено: часть Б убрана.");
+}
+function toast(msg){overlay(`<div class="card center"><div>${msg}</div>
+  <div class="row"><button class="go" onclick="closeOverlay()">Ок</button></div></div>`);}
+function showScheme(){overlay(`<div class="card"><pre>${MARKUP}</pre>
+  <div class="row"><button class="go" onclick="closeOverlay()">Готово</button></div></div>`);}
+
+/* ================= ЭКРАНЫ ================= */
+
+function screenHome(){
+  clearSession();
+  const n=unsyncedCount();
+  const spec=determineDay(dateToIso(new Date()));
+  const p2=spec.phase===2;
+  h(`<h1>Тренировка</h1>
+    <div class="card">
+      <div class="sub">${spec.iso} · ${WD_RU[wdOf(spec.iso)]}</div>
+      <div class="title">${spec.has?spec.goal:"Занятия нет"}</div>
+      <div class="note">${spec.reason||""}</div>
+    </div>
+    <div class="row"><button class="go" onclick="startFlow()" ${spec.has?"":"disabled"}>▶ Начать тренировку</button></div>
+    ${n>0?`<div class="row"><button onclick="uploadAll()">Загрузить: ${n} записей</button></div>`:""}
+    ${p2?`<div class="row"><button class="ghost" onclick="screenWeek()">Расписание на неделю</button></div>`:""}
+    <div class="row"><button class="ghost" onclick="screenImport()">Импорт рекордов</button></div>
+    <div class="row"><button class="ghost" onclick="screenLast()">Последнее занятие</button></div>
+    <div class="foot note center">Занятие идёт офлайн. Загрузка — вечером.</div>`);
+}
+
+function startFlow(){
+  const iso=dateToIso(new Date());
+  const spec=determineDay(iso);
+  screenDayConfirm(spec);
+}
+function screenDayConfirm(spec){
+  S={spec,attempts:[],wellbeing:{},shortened:spec.shortened,startMs:null};
+  h(`<h1>Старт</h1>
+    <div class="card">
+      <div class="sub">${spec.iso} · ${WD_RU[wdOf(spec.iso)]} · Фаза ${spec.phase}${spec.week?`, неделя ${spec.week}`:""}</div>
+      <div class="title">${spec.goal}</div>
+      <div class="note">Нагрузка: ${spec.load}${spec.reason?" · "+spec.reason:""}</div>
+    </div>
+    <div class="row"><button class="go" onclick="screenWellbeing()">Поехали</button></div>
+    <div class="row"><button class="ghost" onclick="pickOtherDay()">Другой день</button>
+      <button class="warn" onclick="screenCancel()">Отмена</button></div>`);
+}
+function pickOtherDay(){
+  overlay(`<div class="card"><div class="title">Другой день (YYYY-MM-DD)</div>
+    <input type="text" id="od" value="${S.spec.iso}">
+    <div class="row"><button class="go" onclick="applyOtherDay()">Ок</button>
+      <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
+}
+function applyOtherDay(){const v=document.getElementById("od").value.trim();
+  closeOverlay(); if(/^\d{4}-\d{2}-\d{2}$/.test(v))screenDayConfirm(determineDay(v));}
+
+/* Экран самочувствия — ЕДИНСТВЕННОЕ место, где имена рядом (это ввод). */
+function screenWellbeing(){
+  const btns=pl=>`<div class="grid5" style="margin:6px 0">
+    ${[1,2,3,4,5].map(v=>`<button class="small" id="wb_${pl}_${v}"
+      onclick="setWB('${pl}',${v})">${v}</button>`).join("")}</div>`;
+  h(`<h1>Самочувствие и сон</h1>
+    <div class="card"><div class="name">ДАНИИЛ</div>${btns("DANIIL")}</div>
+    <div class="card"><div class="name">АДРИАН</div>${btns("ADRIAN")}</div>
+    <div class="row"><button class="go" id="wbGo" onclick="afterWellbeing()" disabled>Дальше</button></div>`);
+}
+function setWB(pl,v){S.wellbeing[pl]=v;saveSession();
+  for(let i=1;i<=5;i++){const b=document.getElementById(`wb_${pl}_${i}`);
+    b.classList.toggle("go",i===v);}
+  if(S.wellbeing.DANIIL&&S.wellbeing.ADRIAN)document.getElementById("wbGo").disabled=false;
+}
+function afterWellbeing(){writeWellbeing();screenMarkup();}
+
+function screenMarkup(){
+  h(`<h1>Разметка</h1><pre>${MARKUP}</pre>
+    <div class="note">Метки постоянны весь лагерь.</div>
+    <div class="row"><button class="go" onclick="buildAndRun()">Готово</button></div>`);
+}
+
+/* ---- Построение шагов занятия и запуск ---- */
+function buildAndRun(){
+  const sp=S.spec;
+  const steps=[];
+  steps.push({kind:"timer",title:"Разминка",mins:sp.phase===2?12:15});
+  if(sp.code==="TUE"&&!sp.control)steps.push({kind:"e03"});
+  // Части
+  for(const ex of sp.a)steps.push(exStep(ex,"часть А"));
+  if(!S.shortened)for(const ex of sp.b)steps.push(exStep(ex,"часть Б"));
+  for(const ex of sp.duel)steps.push({kind:"duel",ex,label:"единоборство"});
+  steps.push({kind:"timer",title:"Заминка",mins:5});
+  steps.push({kind:"done"});
+  S.steps=steps; S.stepIndex=0; saveSession();
+  startSessionClock();
+  runStep();
+}
+function exStep(ex,label){
+  const c=CATALOG[ex];
+  if(c&&(c.type===4))return {kind:"score",ex,label};
+  if(c&&(c.type===5))return {kind:"duel",ex,label};
+  return {kind:"measure",ex,label};
+}
+function runStep(){
+  saveSession();
+  if(S.stepIndex>=S.steps.length){return screenSummary();}
+  const st=S.steps[S.stepIndex];
+  if(st.kind==="timer")return screenTimer(st);
+  if(st.kind==="e03")return screenE03();
+  if(st.kind==="duel")return screenDuel(st);
+  if(st.kind==="score")return screenScore(st);
+  if(st.kind==="measure")return startMeasure(st);
+  if(st.kind==="done")return screenSummary();
+}
+function nextStep(){S.stepIndex++;runStep();}
+
+/* ---- Таймер с АБСОЛЮТНЫМ временем ---- */
+function screenTimer(st){
+  const target=new Date(Date.now()+st.mins*60000);
+  const hhmm=t=>String(t.getHours()).padStart(2,"0")+":"+String(t.getMinutes()).padStart(2,"0");
+  h(`<h1>${st.title}</h1>
+    <div class="card center"><div class="sub">до</div>
+      <div class="big">${hhmm(target)}</div>
+      <div class="note" id="clk"></div></div>
+    <div class="row"><button class="go" onclick="nextStep()">Готово</button></div>
+    ${smallActions()}`);
+  const tick=()=>{const el=document.getElementById("clk");if(!el)return;
+    el.textContent="сейчас "+hhmm(new Date());
+    if(Date.now()>=target.getTime()){/* можно продолжать */}};
+  tick();
+}
+function screenE03(){
+  h(`<h1>Лестница · разминка</h1>
+    <pre>▤▤▤▤▤▤▤▤ ──► 15 м ускорение</pre>
+    <div class="card"><div>4 минуты, 4 варианта по 60 сек:</div>
+      <div class="note">1) два шага в ячейку · 2) один шаг, часто ·
+      3) боком · 4) внутрь-наружу. После каждого — ускорение 15 м.</div>
+      <div class="note">Замеров нет. Даниил 2-3 варианта, Адриан все 4.</div></div>
+    <div class="row"><button class="go" onclick="nextStep()">Готово</button></div>
+    ${smallActions()}`);
+}
+function screenDuel(st){
+  const c=CATALOG[st.ex]||{name:st.ex};
+  h(`<h1>${c.name}</h1>
+    <div class="card"><div class="badge">Единоборство · без ввода</div>
+      <div class="note" style="margin-top:8px">6 подходов каждому. Счёт не ведётся.
+      ${st.ex==="E13"?" (В этот день E13 — с вводом, см. серию.)":""}</div></div>
+    <div class="row"><button class="go" onclick="nextStep()">Готово</button></div>
+    ${smallActions()}`);
+}
+
+/* ================= ЦИКЛ ЗАМЕРА (типы 1,2,3) ================= */
+function startMeasure(st){
+  const plan=planExercise(st.ex,S.spec);
+  // Порядок: строго последовательное чередование, старт с Даниила.
+  const order=[];
+  const maxLen=Math.max(plan.DANIIL.length,plan.ADRIAN.length);
+  for(let i=0;i<maxLen;i++){
+    if(plan.DANIIL[i])order.push({player:"DANIIL",slot:plan.DANIIL[i]});
+    if(plan.ADRIAN[i])order.push({player:"ADRIAN",slot:plan.ADRIAN[i]});
+  }
+  S.measure={ex:st.ex,label:st.label,order,pos:0,stopped:{DANIIL:false,ADRIAN:false},
+    best:{DANIIL:null,ADRIAN:null}};
+  saveSession(); measureNext();
+}
+function measureNext(){
+  const m=S.measure;
+  while(m.pos<m.order.length&&m.stopped[m.order[m.pos].player])m.pos++;
+  if(m.pos>=m.order.length)return nextStep();
+  const cur=m.order[m.pos];
+  // Правило первой попытки: полный отдых перед первой скоростной.
+  if(cur.slot.firstRest&&!cur.slot._rested){cur.slot._rested=true;
+    return screenFullRest(cur.slot.firstRest);}
+  screenStopwatch(cur);
+}
+function screenFullRest(sec){
+  const target=new Date(Date.now()+sec*1000);
+  const hhmm=String(target.getHours()).padStart(2,"0")+":"+String(target.getMinutes()).padStart(2,"0");
+  h(`<h1>Полный отдых</h1>
+    <div class="card center"><div class="sub">до</div><div class="big">${hhmm}</div>
+    <div class="note">Первая попытка — после полного отдыха.</div></div>
+    <div class="row"><button class="go" onclick="measureNext()">Готово</button></div>`);
+  setTimeout(()=>{const b=document.querySelector("button.go");},0);
+}
+function prevTimeFor(player,ex,variant){
+  // «Пред.»: предыдущее время этого игрока в этом упражнении/варианте сегодня.
+  const list=S.attempts.filter(a=>a.player===player&&a.exercise_id===ex
+    &&(a.variant||"")===(variant||"")&&a.time_sec!==null);
+  return list.length?list[list.length-1].time_sec:null;
+}
+function recordFor(player,ex,variant){
+  const r=records()[player]; if(!r)return null;
+  return r[`${ex}|${variant||""}`]??null;
+}
+function screenStopwatch(cur){
+  const m=S.measure, sl=cur.slot, ex=sl.ex||m.ex, c=CATALOG[ex]||CATALOG[m.ex];
+  const nm=RU[cur.player];
+  const totalFor=m.order.filter(o=>o.player===cur.player).length;
+  const idxFor=m.order.slice(0,m.pos+1).filter(o=>o.player===cur.player).length;
+  const variantLine=(c.type===1)?(VARIANT_RU[sl.variant]||""):
+    (c.type===2?`${sl.distance_m} м${sl.variant.includes("fly")?" с ходу":""}`:
+     (sl.distance_m?`ускорение ${sl.distance_m} м`:""));
+  const warmupLine=sl.is_warmup?`<div class="warnbox">⚠ ПРОБНАЯ ${sl.attempt_no} из ${c.warmup}, в зачёт не идёт</div>`:"";
+  // Следующий игрок в строке «Далее».
+  let nextInfo="";
+  for(let k=m.pos+1;k<m.order.length;k++){if(!m.stopped[m.order[k].player]){
+    const o=m.order[k];nextInfo=`Далее: ${RU[o.player]}`;break;}}
+  const prev=prevTimeFor(cur.player,ex,sl.variant), rec=recordFor(cur.player,ex,sl.variant);
+  const recLine=(prev!==null||rec!==null)?
+    `Пред. ${prev!==null?prev.toFixed(2):"—"} · рекорд ${rec!==null?rec.toFixed(2):"—"}`:"";
+  h(`<div class="title">${m.ex} · ${c.name} · ${m.label}</div>
+    <div class="hr"></div>
+    ${warmupLine}
+    <div class="tap" id="tap" onclick="tapWatch()">
+      <div class="name">${nm}</div>
+      <div class="note">попытка ${idxFor} из ${totalFor}${variantLine?" · "+variantLine:""}</div>
+      <div class="num" id="num">0.00</div>
+      <div class="note" id="hint">тап = старт</div>
+    </div>
+    <div class="note">${recLine}</div>
+    <div class="note">${nextInfo}</div>
+    <div class="row">
+      <button class="ghost small" onclick="notMeasured()">Не засёк</button>
+      <button class="ghost small" onclick="measureBack()">Назад</button>
+      <button class="ghost small" onclick="manualEntry()">Ручной ввод</button>
+    </div>
+    ${smallActions()}`);
+  S.watch={running:false,t0:0,player:cur.player,slot:sl,ex};
+}
+function tapWatch(){
+  const w=S.watch;
+  if(!w.running){w.running=true;w.t0=performance.now();
+    document.getElementById("tap").classList.add("run");
+    document.getElementById("hint").textContent="тап = стоп";
+    w.raf=requestAnimationFrame(function loop(){
+      const el=document.getElementById("num");if(!el||!w.running)return;
+      el.textContent=((performance.now()-w.t0)/1000).toFixed(2);
+      w.raf=requestAnimationFrame(loop);});
+  } else {
+    w.running=false; if(w.raf)cancelAnimationFrame(w.raf);
+    const t=(performance.now()-w.t0)/1000;
+    recordMeasured(t);
+  }
+}
+function notMeasured(){recordMeasured(null,true);}
+function manualEntry(){
+  overlay(`<div class="card"><div class="title">Ручной ввод (2.06 / 2,06 / 206)</div>
+    <input type="text" id="mv" inputmode="decimal">
+    <div class="row"><button class="go" onclick="applyManual()">Ок</button>
+      <button class="ghost" onclick="closeOverlay()">Отмена</button></div>
+    <div class="row"><button class="ghost" onclick="seriesEntry()">Ввести всю серию</button></div></div>`);
+}
+function parseTime(s){s=s.trim().replace(",",".");if(!s)return null;
+  let v=parseFloat(s); if(s.indexOf(".")<0&&v>=100)v=v/100; return isNaN(v)?null:v;}
+function applyManual(){const v=parseTime(document.getElementById("mv").value);
+  closeOverlay(); recordMeasured(v);}
+function seriesEntry(){
+  overlay(`<div class="card"><div class="title">Вся серия одного игрока</div>
+    <div class="note">Числа через пробел, в порядке выполнения.</div>
+    <input type="text" id="sv" inputmode="decimal">
+    <div class="row"><button class="go" onclick="applySeries()">Разложить</button>
+      <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
+}
+function applySeries(){
+  const raw=document.getElementById("sv").value.trim();closeOverlay();
+  const nums=raw.split(/\s+/).map(parseTime).filter(v=>v!==null);
+  const m=S.measure, player=S.watch.player;
+  const slots=m.order.filter(o=>o.player===player).map(o=>o.slot);
+  let best=null,stopAt=null;
+  for(let i=0;i<nums.length&&i<slots.length;i++){
+    const sl=slots[i];
+    pushAttempt({player,ex:sl.ex,variant:sl.variant,attempt_no:sl.attempt_no,
+      is_warmup:sl.is_warmup,time_sec:nums[i],distance_m:sl.distance_m});
+    if(!sl.is_warmup){
+      if(CATALOG[m.ex].stop&&best!==null&&Math.round((nums[i]-best)*100)/100>=STOP_THRESHOLD&&stopAt===null)
+        stopAt=i+1;
+      best=(best===null)?nums[i]:Math.min(best,nums[i]);
+    }
+  }
+  m.stopped[player]=true; // серия этого игрока введена целиком
+  // Сдвинуть позицию за все слоты этого игрока.
+  toast(stopAt!==null?`По стоп-правилу серию следовало прекратить на попытке ${stopAt}.`
+    :"Серия принята.");
+  measureNext();
+}
+function measureBack(){ // откат на один шаг
+  const m=S.measure; if(m.pos>0){m.pos--; // убрать последнюю запись этого слота
+    const last=S.attempts[S.attempts.length-1];
+    if(last){const a=loadAttempts();a.pop();saveAttempts(a);S.attempts.pop();}}
+  measureNext();
+}
+function recordMeasured(t,notMeasuredFlag){
+  const w=S.watch,m=S.measure,sl=w.slot;
+  const rec=pushAttempt({player:w.player,ex:sl.ex,variant:sl.variant,
+    attempt_no:sl.attempt_no,is_warmup:sl.is_warmup,time_sec:t,
+    distance_m:sl.distance_m,note:notMeasuredFlag?"не засечено":""});
+  // Стоп-правило (не для пробных, не для E16).
+  if(!sl.is_warmup&&t!==null&&CATALOG[m.ex].stop){
+    const b=m.best[w.player];
+    if(b!==null&&Math.round((t-b)*100)/100>=STOP_THRESHOLD){
+      return screenStopRule(w.player,b,t);
+    }
+    m.best[w.player]=(b===null)?t:Math.min(b,t);
+  } else if(!sl.is_warmup&&t!==null){
+    const b=m.best[w.player]; m.best[w.player]=(b===null)?t:Math.min(b,t);
+  }
+  m.pos++; saveSession(); measureNext();
+}
+function screenStopRule(player,best,t){
+  h(`<h1>Стоп-правило</h1>
+    <div class="card center">
+      <div class="title">Серия окончена</div>
+      <div class="big">Лучшее: ${best.toFixed(2)}</div>
+      <div class="note">Последняя ${t.toFixed(2)} — падение ${(t-best).toFixed(2)}.</div>
+    </div>
+    <div class="row"><button class="go" onclick="stopSeries('${player}')">Завершить</button>
+      <button class="ghost" onclick="continueSeries()">Ещё один</button></div>`);
+}
+function stopSeries(player){ // по умолчанию — завершить
+  const m=S.measure; m.stopped[player]=true; m.pos++; measureNext();
+}
+function continueSeries(){const m=S.measure;
+  const cur=m.order[m.pos]; m.best[cur.player]=Math.min(
+    m.best[cur.player]??Infinity, S.attempts[S.attempts.length-1].time_sec);
+  m.pos++; measureNext();}
+
+/* ================= ТИП 4: счёт/оценка (E10, E13) ================= */
+function screenScore(st){
+  if(st.ex==="E10")return screenE10(st);
+  if(st.ex==="E13")return screenE13(st);
+  // прочее type4 — общий ввод голов
+  screenGenericScore(st);
+}
+// E10: 4 серии на игрока, выбор дистанции перед серией, кнопки 0-12.
+function screenE10(st){
+  S.e10={player:"DANIIL",series:1,dist:null};
+  e10Dist();
+}
+function e10Dist(){
+  const e=S.e10, near=e.player==="DANIIL"?"14-15 м":"11-14 м",
+    far=e.player==="DANIIL"?"20-25 м":"15-18 м";
+  const onlyNear=(e.series===1);
+  h(`<h1>Удары · ${RU[e.player]} · серия ${e.series}/4</h1>
+    <div class="card"><div class="note">Серия ${e.series}: ${["с места","после приёма","в одно касание","после рывка"][e.series-1]}.</div>
+      ${onlyNear?`<div class="note">Серия 1 — только ближняя.</div>`:""}</div>
+    <div class="title">Дистанция серии</div>
+    <div class="row"><button class="go" onclick="e10SetDist('near')">Ближняя ${near}</button>
+      ${onlyNear?"":`<button onclick="e10SetDist('far')">Дальняя ${far}</button>`}</div>
+    ${smallActions()}`);
+}
+function e10SetDist(kind){
+  const e=S.e10; e.dist=kind;
+  const distM=e.player==="DANIIL"?(kind==="near"?15:22):(kind==="near"?13:16);
+  const max=[8,10,10,12][e.series-1];
+  h(`<h1>Голы · ${RU[e.player]} · серия ${e.series}/4</h1>
+    <div class="note">${kind==="near"?"ближняя":"дальняя"} · из ${max}</div>
+    <div class="gridN" id="g10">${Array.from({length:max+1},(_,i)=>
+      `<button onclick="e10Save(${i},${distM},${max})">${i}</button>`).join("")}</div>
+    ${smallActions()}`);
+}
+function e10Save(goals,distM,max){
+  const e=S.e10;
+  pushAttempt({player:e.player,ex:"E10",variant:"s"+e.series,attempt_no:e.series,
+    goals,shots:max,distance_m:distM});
+  // Следующая серия / игрок.
+  if(e.series<4){e.series++;e.dist=null;return e10Dist();}
+  if(e.player==="DANIIL"){e.player="ADRIAN";e.series=1;e.dist=null;return e10Dist();}
+  delete S.e10; nextStep();
+}
+// E13: контроль мяча 1-5 и голы из 8, по игрокам последовательно.
+function screenE13(st){ S.e13={player:"DANIIL",stage:"control"}; e13Render(); }
+function e13Render(){
+  const e=S.e13;
+  if(e.stage==="control"){
+    h(`<h1>Приём спиной · ${RU[e.player]}</h1>
+      <div class="note">Контроль мяча (1-5)</div>
+      <div class="grid5">${[1,2,3,4,5].map(v=>
+        `<button onclick="e13Control(${v})">${v}</button>`).join("")}</div>
+      ${smallActions()}`);
+  } else {
+    h(`<h1>Приём спиной · ${RU[e.player]}</h1>
+      <div class="note">Голы из 8</div>
+      <div class="gridN">${Array.from({length:9},(_,i)=>
+        `<button onclick="e13Goals(${i})">${i}</button>`).join("")}</div>
+      ${smallActions()}`);
+  }
+}
+function e13Control(v){S.e13._c=v;S.e13.stage="goals";e13Render();}
+function e13Goals(g){const e=S.e13;
+  pushAttempt({player:e.player,ex:"E13",control:e._c,goals:g,shots:8});
+  if(e.player==="DANIIL"){e.player="ADRIAN";e.stage="control";delete e._c;return e13Render();}
+  delete S.e13; nextStep();}
+function screenGenericScore(st){
+  h(`<h1>${CATALOG[st.ex].name}</h1><div class="note">Ввод не задан.</div>
+    <div class="row"><button class="go" onclick="nextStep()">Готово</button></div>`);
+}
+
+/* ================= ОТМЕНА ЗАНЯТИЯ ================= */
+function screenCancel(){
+  h(`<h1>Отмена занятия</h1>
+    <div class="warnbox">Критерии остановки:
+    выше 32 °C в тени · озноб · гусиная кожа ·
+    прекратилось потоотделение · головная боль.</div>
+    <div class="row"><button class="warn" onclick="screenHome()">Остановить занятие</button></div>
+    <div class="row"><button class="ghost" onclick="S&&S.spec?screenDayConfirm(S.spec):screenHome()">Назад</button></div>`);
+}
+
+/* ================= ИТОГ (отдельные карточки на игрока) ================= */
+function screenSummary(){
+  if(sessionTimer){clearInterval(sessionTimer);sessionTimer=null;}
+  // Итог формируется ОТДЕЛЬНОЙ карточкой на игрока. Никаких сравнений.
+  const cards=PLAYERS.map(pl=>summaryCard(pl)).join("");
+  h(`<h1>Итог занятия</h1>${cards}
+    <div class="row"><button class="go" onclick="uploadAll()">Загрузить сейчас</button>
+      <button class="ghost" onclick="finishLater()">Позже</button></div>`);
+}
+function summaryCard(pl){
+  const list=S.attempts.filter(a=>a.player===pl&&a.time_sec!==null&&!a.is_warmup);
+  const byEx={};
+  for(const a of list){(byEx[a.exercise_id]=byEx[a.exercise_id]||[]).push(a.time_sec);}
+  let rows="";
+  for(const ex in byEx){const v=byEx[ex];
+    rows+=`<div>${(CATALOG[ex]||{name:ex}).name}: лучшее ${Math.min(...v).toFixed(2)}</div>`;}
+  if(!rows)rows='<div class="note">Замеров со временем нет.</div>';
+  return `<div class="card"><div class="name">${RU[pl]}</div>${rows}</div>`;
+}
+function finishLater(){clearSession();screenHome();}
+
+/* ================= ВЫГРУЗКА ================= */
+function uploadAll(){
+  const all=loadAttempts();
+  const pending=all.filter(a=>!a.uploaded);
+  if(!pending.length){toast("Нет несинхронизированных записей.");return;}
+  const c=ctx();
+  const payload={records:pending.map(stripLocal),
+    context:{club_days:[...c.club],match_days:[...c.match]}};
+  if(tg&&tg.sendData){
+    tg.sendData(JSON.stringify(payload));
+    // Пометим как выгруженные (не удаляем).
+    all.forEach(a=>{if(!a.uploaded)a.uploaded=true;});
+    saveAttempts(all);
+    // Telegram обычно закрывает Mini App после sendData.
+  } else {
+    // Вне Telegram — покажем полезную нагрузку для ручной проверки.
+    overlay(`<div class="card"><div class="title">Нет Telegram. Полезная нагрузка:</div>
+      <pre>${JSON.stringify(payload,null,1)}</pre>
+      <div class="row"><button class="go" onclick="closeOverlay()">Ок</button></div></div>`);
+  }
+}
+function stripLocal(a){const{uploaded,...rest}=a;return rest;}
+
+/* ================= РАСПИСАНИЕ НЕДЕЛИ (Фаза 2) ================= */
+function screenWeek(){
+  const c=ctx();
+  h(`<h1>Расписание на неделю</h1>
+    <div class="card"><div class="title">Клубные дни (через запятую)</div>
+      <input type="text" id="club" value="${[...c.club].join(", ")}"></div>
+    <div class="card"><div class="title">Даты матчей</div>
+      <input type="text" id="match" value="${[...c.match].join(", ")}"></div>
+    <div class="note">Формат: 2026-08-21, 2026-08-24</div>
+    <div class="row"><button class="go" onclick="saveWeek()">Сохранить</button>
+      <button class="ghost" onclick="screenHome()">Назад</button></div>`);
+}
+function saveWeek(){
+  const parse=id=>document.getElementById(id).value.split(",").map(s=>s.trim())
+    .filter(s=>/^\d{4}-\d{2}-\d{2}$/.test(s));
+  localStorage.setItem("trening_ctx",JSON.stringify({
+    club_days:parse("club"),match_days:parse("match")}));
+  screenHome();
+}
+
+/* ================= ИМПОРТ РЕКОРДОВ (слепок от бота) ================= */
+function screenImport(){
+  h(`<h1>Импорт рекордов</h1>
+    <div class="note">Вставьте слепок из ответа бота (по игроку).
+    Он показывается на поле в строке «Пред. · рекорд».</div>
+    <textarea id="imp" placeholder='{"player":"DANIIL","records":{...}}'></textarea>
+    <div class="row"><button class="go" onclick="applyImport()">Сохранить</button>
+      <button class="ghost" onclick="screenHome()">Назад</button></div>`);
+}
+function applyImport(){
+  try{
+    const o=JSON.parse(document.getElementById("imp").value.trim());
+    if(!o.player||!o.records)throw 0;
+    const r=records(); r[o.player]=o.records; // ТОЛЬКО этот игрок
+    localStorage.setItem("trening_records",JSON.stringify(r));
+    toast("Рекорды "+o.player+" сохранены.");
+  }catch(e){toast("Не удалось прочитать слепок.");}
+}
+
+/* ================= ПОСЛЕДНЕЕ ЗАНЯТИЕ ================= */
+function screenLast(){
+  const a=loadAttempts();
+  const dates=[...new Set(a.map(x=>x.date))].sort();
+  const last=dates[dates.length-1];
+  if(!last){h(`<h1>Последнее занятие</h1><div class="note">Данных нет.</div>
+    <div class="row"><button class="go" onclick="screenHome()">Назад</button></div>`);return;}
+  const cards=PLAYERS.map(pl=>{
+    const list=a.filter(x=>x.date===last&&x.player===pl&&x.time_sec!==null&&!x.is_warmup);
+    const byEx={};list.forEach(x=>{(byEx[x.exercise_id]=byEx[x.exercise_id]||[]).push(x.time_sec);});
+    let rows=Object.keys(byEx).map(ex=>`<div>${(CATALOG[ex]||{name:ex}).name}: ${Math.min(...byEx[ex]).toFixed(2)}</div>`).join("");
+    return `<div class="card"><div class="name">${RU[pl]}</div>${rows||'<div class="note">—</div>'}</div>`;
+  }).join("");
+  h(`<h1>Последнее занятие · ${last}</h1>${cards}
+    <div class="row"><button class="go" onclick="screenHome()">Назад</button></div>`);
+}
+
+/* ================= ВОССТАНОВЛЕНИЕ НЕЗАВЕРШЁННОГО ================= */
+function boot(){
+  const raw=localStorage.getItem("trening_session");
+  if(raw){
+    overlay(`<div class="card"><div class="title">Есть незавершённое занятие</div>
+      <div class="row"><button class="go" onclick="resume()">Продолжить</button>
+        <button class="ghost" onclick="dropSession()">Закрыть</button></div></div>`);
+  } else { screenHome(); }
+}
+function resume(){closeOverlay();S=JSON.parse(localStorage.getItem("trening_session"));
+  if(S.steps){startSessionClock();runStep();}else screenHome();}
+function dropSession(){closeOverlay();clearSession();screenHome();}
+
+/* Регистрация service worker для офлайна. */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+}
+boot();
+</script>
+</body>
+</html>
