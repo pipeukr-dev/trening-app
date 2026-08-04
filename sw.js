@@ -1,6 +1,6 @@
 // Service worker: офлайн-кэш приложения.
 // Занятие идёт на поле без интернета — кэшируем оболочку целиком.
-const CACHE = 'trening-v1';
+const CACHE = 'trening-v2';
 const ASSETS = ['./', './index.html'];
 
 self.addEventListener('install', (e) => {
