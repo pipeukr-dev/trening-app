@@ -342,7 +342,7 @@ E10S:{ name:"Удары после ведения", type:"shots",
   rec:"Сколько попал из 10.",
 },
 E04:{ name:"Слалом", type:"time_goal",
-  setup:"8 фишек в одну линию.\nДаниилу — 2 м между фишками, Адриану — 1.5 м.\nОт последней фишки: Даниилу 15 м до удара, Адриану 10 м.",
+  setup:"8 фишек в одну линию, между фишками 2 метра — обоим (одна разметка).\nОт последней фишки: Даниилу 15 м до удара, Адриану 10 м.",
   svg:()=>svg([40,70,100,130,160,190,220,250].map(x=>cone(x,60)).join("")+
     dim(40,78,70,"2 м")+mark(20,64,"X")+ball(30,68)+arrow(255,60,290,55)+
     lbl(230,80,"рывок 15 м")+goal(288,40)),
@@ -925,8 +925,8 @@ function recordTime(t,nm){
 }
 function screenGoalAsk(cur,t){
   h(`<h1>Гол?</h1>
-    <div class="card center"><div class="name">${RU[cur.player]}</div>
-      <div class="big">${t.toFixed(2)}</div></div>
+    <div class="card center">
+      <div style="font-size:24px;font-weight:800">${RU[cur.player]} · ${t.toFixed(2)} · Гол?</div></div>
     <div class="row"><button class="go" onclick="setGoal(true)">⚽ ДА</button>
       <button class="warn" onclick="setGoal(false)">✕ НЕТ</button></div>`);
 }
@@ -1181,8 +1181,17 @@ function screenImport(){
     <div class="row"><button class="go" onclick="applyImport()">Сохранить</button>
       <button class="ghost" onclick="screenHome()">Назад</button></div>`);
 }
+// Вытащить JSON из вставленного текста: всё между первой { и последней }.
+// Обёртка ```, строка «Рекорды …» и прочий текст вокруг игнорируются.
+function extractJsonBlock(text){
+  if(!text) return null;
+  const i=text.indexOf("{"), j=text.lastIndexOf("}");
+  if(i<0||j<0||j<i) return null;
+  return text.slice(i,j+1);
+}
 function applyImport(){
-  try{ const o=JSON.parse(document.getElementById("imp").value.trim());
+  try{ const block=extractJsonBlock(document.getElementById("imp").value);
+    const o=JSON.parse(block);
     if(!o.player||!o.records)throw 0;
     const r=records(); r[o.player]=o.records;
     localStorage.setItem("trening_records",JSON.stringify(r));
