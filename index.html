@@ -230,8 +230,9 @@ function markupSvg(spec){
 function dayMarkup(spec){
   const items=spec.blocks.map((b,i)=>{
     const ex=b[0], name=(EX[ex]||{name:ex}).name;
-    const snip=(MARKUP_SNIPPET[ex]||"по описанию упражнения").replace(/\n/g,"\n   ");
-    return `${i+1}. ${name}\n   ${snip}`;
+    let snip=(MARKUP_SNIPPET[ex]||"по описанию упражнения");
+    if(ex==="E13") snip+="\nПриёмов сегодня: "+e13N(spec.code)+".";
+    return `${i+1}. ${name}\n   ${snip.replace(/\n/g,"\n   ")}`;
   });
   return {text:items.join("\n\n"), svg:markupSvg(spec)};
 }
@@ -344,21 +345,21 @@ E13:{ name:"Приём под опекой", type:"control",
         ADRIAN:"Держишь контакт до удара — учится бить, не сбрасывая соперника."},
   rec:"Контроль мяча 1-5 (твоя оценка) и сколько голов из общего числа приёмов.",
 },
-E12:{ name:"Ты догоняешь и оттесняешь", type:"duel",
+E12:{ name:"Ты догоняешь и оттесняешь", type:"duel_goals", shots:5,
   setup:"Игрок с мячом в 20 м от ворот.\nТы в двух метрах позади него и чуть сбоку.",
   svg:()=>svg(goal(270,55)+mark(20,110,"X")+ball(35,115)+arrow(45,110,255,90)+
     lbl(60,130,"ведение 20 м")+mark(30,80,"ТЫ")+arrow(45,85,90,100)+lbl(15,72,"сзади-сбоку")),
   steps:["Он ведёт мяч к воротам, ты догоняешь сзади-сбоку и лезешь плечом.",
     "Он должен пробить, не дав тебе занять позицию.",
-    "5 подходов каждому. Замера и счёта нет."],
-  reps_text:"5 подходов каждому. Без записи.",
+    "5 подходов каждому. В конце вводишь, сколько забил из 5."],
+  reps_text:"5 подходов каждому. Записывается голов из 5.",
   why:"Смысл — не сбросить тебя силой, а не дать контакту случиться: мяч на дальнюю ногу, сменить угол, уйти раньше.",
   smotri:"Мяч всё время на дальней от тебя ноге. Удар без остановки.",
   oshibka:"Пытается перетолкать корпусом и встаёт. Ведёт мяч на ближней к тебе ноге.",
   pravilno:"Ушёл на полшага раньше, контакт не состоялся.",
   match:"Забрал мяч, побежал, защитник догнал и лезет плечом. Для Даниила при его сложении — главный эпизод.",
   diff:{DANIIL:"Контакт настоящий, идёшь всерьёз.",ADRIAN:"Обозначаешь, без веса."},
-  rec:"Ничего не записывается.",
+  rec:"Голов из 5 на каждого.",
 },
 E10S:{ name:"Удары после ведения", type:"shots",
   setup:"Мяч у игрока в 25 м от ворот.\nТочка удара — фишка: Даниилу 15 м от ворот, Адриану 12 м.",
@@ -408,22 +409,22 @@ E05:{ name:"Зигзаг с мячом", type:"time_goal",
   diff:{DANIIL:"Уходить от фишки на полшага раньше, чем удобно — моделирование ухода от контакта.",ADRIAN:""},
   rec:"Время каждого прохода и гол да/нет.",
 },
-E14:{ name:"Обыгрыш лицом", type:"duel",
+E14:{ name:"Обыгрыш лицом", type:"duel_goals", shots:6,
   setup:"Игрок с мячом в 20 м от ворот.\nТы между ним и воротами, в 5 м от него, лицом к нему.",
   svg:()=>svg(goal(275,55)+mark(20,90,"X")+ball(33,94)+arrow(45,90,120,88)+
     mark(150,90,"ТЫ")+lbl(120,110,"отступаешь, закрываешь угол")+arrow(175,88,265,80)),
   steps:["Ты отступаешь и закрываешь угол атаки. Он идёт в обыгрыш и бьёт.",
     "Играешь позиционно, а не силой: руками не держишь, корпусом не толкаешь.",
-    "6 подходов каждому. Счёт не ведётся."],
-  reps_text:"6 подходов каждому. Без записи.",
+    "6 подходов каждому. В конце вводишь, сколько забил из 6."],
+  reps_text:"6 подходов каждому. Записывается голов из 6.",
   req:"Обводить в обе стороны. Обыгрыш в одну сторону читается защитником за один эпизод.",
   smotri:"Решение принимается до приёма мяча. Обыгрыш на скорости, а не с места.",
   oshibka:"Останавливается перед защитником и показывает финты. Всегда уходит в одну сторону.",
   pravilno:"Прошёл на скорости в заранее выбранную сторону.",
-  match:"Выход один на один, обыгрыш последнего защитника.",
+  match:"Выход один на один, обыгрыш последнего защитника. Здесь видно, работает ли остальная подготовка.",
   diff:{DANIIL:"Акцент на смещение внутрь под удар в дальний угол — он играет и вингером.",
         ADRIAN:"Акцент на вход в штрафную с сохранением корпуса."},
-  rec:"Ничего не записывается.",
+  rec:"Голов из 6 на каждого.",
 },
 E06:{ name:"Челнок 5-10-5", type:"time", stop:true, stance:false,
   setup:"Три фишки в одну линию.\nДаниилу — через 5 м, Адриану — через 4 м.\nИгрок у средней фишки лицом к тебе (перпендикулярно линии фишек).",
@@ -433,8 +434,8 @@ E06:{ name:"Челнок 5-10-5", type:"time", stop:true, stance:false,
     "Касается фишки рукой, наклоняясь.",
     "Разворот на 180°, бег 10 м влево до крайней фишки, касание рукой.",
     "Разворот на 180°, 5 м обратно в центр. Одно повторение = замер.",
-    "3 раза каждому. Приставными шагами НЕ делаем — это для защитников."],
-  reps_text:"3 повторения каждому.",
+    "Даниил 5 повторов, Адриан 3. Приставными шагами НЕ делаем — это для защитников."],
+  reps_text:"Даниил 5 повторов, Адриан 3.",
   smotri:"Тормозит на трёх шагах. Стопа при развороте под углом. Корпус низкий в момент разворота.",
   oshibka:"Разворачивается на прямой ноге. Касается фишки ногой вместо руки, теряя корпус.",
   pravilno:"Обратное движение начинается сразу, без паузы.",
@@ -550,7 +551,7 @@ function repsFor(code,spec){
     push("ADRIAN",[slot("ADRIAN","E02","15m",15,1,80),slot("ADRIAN","E02","15m",15,2,80),slot("ADRIAN","E02","15m",15,3,80),
       slot("ADRIAN","E02","20m",20,4,90),slot("ADRIAN","E02","20m",20,5,90)]);
   } else if(code==="E06"){
-    push("DANIIL",[1,2,3].map(n=>slot("DANIIL","E06","",5,n,75)));
+    push("DANIIL",[1,2,3,4,5].map(n=>slot("DANIIL","E06","",5,n,75)));
     push("ADRIAN",[1,2,3].map(n=>slot("ADRIAN","E06","",4,n,75)));
   } else if(code==="E07"){
     const mk=(pl,d)=>[...[1,2,3,4,5].map(n=>slot(pl,"E07","spin",d,n,70)),
@@ -793,7 +794,8 @@ function screenWhat(st){
     <h1>${e.name}</h1>
     <ol>${e.steps.map(s=>`<li>${s}</li>`).join("")}</ol>
     <div class="reps" style="white-space:pre-line">${e.reps_text}${
-      (st.ex==="E02"&&e02Biweekly(S.spec.iso))?"\n"+e.biweek_text:""}</div>
+      (st.ex==="E02"&&e02Biweekly(S.spec.iso))?"\n"+e.biweek_text:""}${
+      (st.ex==="E13")?"\nСегодня приёмов: "+e13N(S.spec.code)+" (шкала голов 0–"+e13N(S.spec.code)+").":""}</div>
     ${e.stance?`<div class="reps">${STANCE}</div>`:""}
     ${e.req?`<div class="warnbox">${e.req}</div>`:""}
     ${e.hint?`<div class="note">${e.hint}</div>`:""}
@@ -813,6 +815,7 @@ function screenWhat(st){
 function startWork(st){
   const e=EX[st.ex]; S.block={ex:st.ex};
   if(e.type==="duel")return workDuel(st);
+  if(e.type==="duel_goals")return workDuelGoals(st);
   if(e.type==="shots")return workShots(st);
   if(e.type==="control")return workControl(st);
   if(e.type==="four")return workFour(st);
@@ -825,6 +828,30 @@ function workDuel(st){
       <div class="note" style="margin-top:8px">${e.reps_text}</div></div>
     <div class="row"><button class="go" onclick="nextStep()">Готово</button></div>
     ${smallActions()}`);
+}
+// Единоборство с учётом голов: после подходов — ввод по каждому игроку.
+function workDuelGoals(st){
+  const e=EX[st.ex];
+  h(`<h1>${e.name}</h1>
+    <div class="card"><div class="badge">${e.shots} подходов каждому</div>
+      <div class="note" style="margin-top:8px">${e.reps_text}</div></div>
+    <div class="row"><button class="go" onclick="startDuelGoals('${st.ex}')">Ввести результат</button></div>
+    ${smallActions()}`);
+}
+function startDuelGoals(ex){
+  S.duelg={ex,shots:EX[ex].shots,player:"DANIIL"}; duelgRender();
+}
+function duelgRender(){
+  const d=S.duelg;
+  h(`<h1>${EX[d.ex].name} · ${RU[d.player]}</h1>
+    <div class="note">Сколько забил из ${d.shots}?</div>
+    <div class="gridN">${Array.from({length:d.shots+1},(_,i)=>`<button onclick="duelgSave(${i})">${i}</button>`).join("")}</div>
+    ${smallActions()}`);
+}
+function duelgSave(g){const d=S.duelg;
+  pushAttempt({player:d.player,ex:d.ex,goals:g,shots:d.shots});
+  if(d.player==="DANIIL"){d.player="ADRIAN";return duelgRender();}
+  delete S.duelg; nextStep();
 }
 
 /* ---- Измеряемые упражнения (time / time_goal / repeat) ---- */
