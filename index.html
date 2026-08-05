@@ -125,18 +125,25 @@ const CONTROL_DAYS={"2026-08-03":1,"2026-08-14":2,"2026-09-09":3};
 const TAPER_SHORT="2026-08-19", TAPER_WEEK_START="2026-08-17";
 const WD=["MON","TUE","WED","THU","FRI","SAT","SUN"];
 const WD_RU=["понедельник","вторник","среда","четверг","пятница","суббота","воскресенье"];
-// Матрица Фазы 1: [цель, минут, [[код, минут-блока]...]]
+// Разминка/заминка/пауза (минут) — каркас. Длительность дня вычисляется:
+// разминка + Σблоки + паузы(по числу блоков) + заминка.
+const WARMUP_MIN={1:15,2:12}, COOLDOWN_MIN={1:5,2:4}, PAUSE_MIN=1;
+function sessionMinutes(phase,blocks){
+  return WARMUP_MIN[phase]+blocks.reduce((a,b)=>a+b[1],0)+blocks.length*PAUSE_MIN+COOLDOWN_MIN[phase];
+}
+// Матрица Фазы 1: [цель, [[код, минут-блока]...]] (минуты дня — из sessionMinutes)
 const P1_MATRIX={
-  MON:["Скорость и первый шаг",85,[["E01",14],["E02",15],["E13",14],["E12",9],["E10S",9]]],
-  TUE:["Дриблинг и быстрые ноги",80,[["E04",14],["E05",15],["E14",14],["E10S",9]]],
-  WED:["Смена направления",80,[["E06",12],["E13",18],["E14",14],["E12",9]]],
-  THU:["Контроль и завершение",80,[["E07",14],["E10",32],["E13",9]]],
-  FRI:["Отрыв и повторный рывок",80,[["E15",20],["E16",14],["E13",12]]],
+  MON:["Скорость и первый шаг",[["E01",14],["E02",15],["E13",13],["E12",9],["E10S",9]]],
+  TUE:["Дриблинг и быстрые ноги",[["E04",15],["E05",15],["E14",14],["E10S",12]]],
+  WED:["Смена направления",[["E06",12],["E13",18],["E14",14],["E12",12]]],
+  THU:["Контроль и завершение",[["E07",14],["E10",34],["E13",9]]],
+  FRI:["Отрыв и повторный рывок",[["E15",25],["E16",16],["E13",16]]],
 };
+// Фаза 2 — два блока, короткое занятие (35 мин).
 const P2_TYPES={
-  S:["Скорость",[["E01",12],["E02",12],["E13",10]]],
-  B:["Мяч",[["E04",12],["E10S",10],["E14",12]]],
-  D:["Единоборство",[["E13",14],["E12",10]]],
+  S:["Скорость",[["E01",10],["E02",7]]],
+  B:["Мяч",[["E04",10],["E10S",7]]],
+  D:["Единоборство",[["E13",10],["E12",7]]],
 };
 function isoToDate(s){const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);}
 function dateToIso(dt){return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");}
@@ -166,33 +173,40 @@ function noDay(iso,phase,reason){return {iso,phase,week:null,code:WD[wdOf(iso)],
 function determineDay(iso){
   const wd=wdOf(iso),code=WD[wd];
   if(CONTROL_DAYS[iso]!==undefined){
-    return {iso,phase:iso<=P1_END?1:2,week:iso<=P1_END?weekOfP1(iso):null,code,
-      day_code:"CTRL_"+CONTROL_DAYS[iso],goal:"Контрольный замер",minutes:60,has:true,
-      control:true,type:null,blocks:[["E01",12],["E02",12],["E08",20]],shortened:false,
+    const ph=iso<=P1_END?1:2, blocks=[["E01",12],["E02",12],["E08",13]];
+    return {iso,phase:ph,week:iso<=P1_END?weekOfP1(iso):null,code,
+      day_code:"CTRL_"+CONTROL_DAYS[iso],goal:"Контрольный замер",
+      minutes:sessionMinutes(ph,blocks),has:true,
+      control:true,type:null,blocks,shortened:false,
       reason:"Контрольный день: тест, не тренировка."};
   }
   if(iso>=P1_START&&iso<=P1_END){
     if(!P1_MATRIX[code])return noDay(iso,1,"Выходной. В Фазе 1 занятия только Пн-Пт.");
-    const w=weekOfP1(iso),[goal,min,blocks]=P1_MATRIX[code];
-    if(iso===TAPER_SHORT)return {iso,phase:1,week:w,code,day_code:"P1_W"+w+"_"+code,
-      goal:"Подводка: старты + удары",minutes:40,has:true,control:false,type:null,
-      blocks:[["E01",14],["E10S",12]],shortened:true,reason:"Подводка перед Фазой 2."};
-    const short=iso>=TAPER_WEEK_START;
-    return {iso,phase:1,week:w,code,day_code:"P1_W"+w+"_"+code,goal,minutes:min,has:true,
-      control:false,type:null,blocks:blocks.map(b=>b.slice()),shortened:short,
+    const w=weekOfP1(iso),[goal,blocks]=P1_MATRIX[code];
+    if(iso===TAPER_SHORT){const tb=[["E01",10],["E10S",8]];
+      return {iso,phase:1,week:w,code,day_code:"P1_W"+w+"_"+code,
+      goal:"Подводка: старты + удары",minutes:sessionMinutes(1,tb),has:true,control:false,type:null,
+      blocks:tb,shortened:true,reason:"Подводка перед Фазой 2."};}
+    const short=iso>=TAPER_WEEK_START, bl=blocks.map(b=>b.slice());
+    return {iso,phase:1,week:w,code,day_code:"P1_W"+w+"_"+code,goal,minutes:sessionMinutes(1,bl),has:true,
+      control:false,type:null,blocks:bl,shortened:short,
       reason:short?"Подводка: объём -50%.":""};
   }
   if(iso>=P2_START&&iso<=P2_END){
     const c=ctx(),[t,reason]=phase2Type(iso,c);
     if(!t)return noDay(iso,2,reason);
-    const[name,blocks]=P2_TYPES[t];
-    return {iso,phase:2,week:null,code,day_code:"P2_"+t,goal:name,minutes:38,has:true,
-      control:false,type:t,blocks:blocks.map(b=>b.slice()),shortened:false,reason};
+    const[name,blocks]=P2_TYPES[t], bl=blocks.map(b=>b.slice());
+    return {iso,phase:2,week:null,code,day_code:"P2_"+t,goal:name,minutes:sessionMinutes(2,bl),has:true,
+      control:false,type:t,blocks:bl,shortened:false,reason};
   }
   return noDay(iso,null,"Дата вне программы лагеря.");
 }
 // Число приёмов E13 по дню (контроль под опекой).
 function e13N(code){return {MON:6,WED:8,THU:4,FRI:5}[code]||5;}
+// Фаза-зависимые счётчики: в Фазе 2 объём срезан.
+function receptionsFor(spec){return spec.phase===2?5:e13N(spec.code);}
+function e10sShots(spec){return spec.phase===2?6:10;}
+function duelShotsFor(ex,spec){return (ex==="E12"&&spec.phase===2)?4:EX[ex].shots;}
 // Раз в две недели удлинённый третий длинный забег Даниила (E02).
 function e02Biweekly(iso){const diff=Math.round((isoToDate(iso)-isoToDate("2026-08-10"))/86400000);
   return diff>=0 && diff%14===0;}
@@ -231,7 +245,7 @@ function dayMarkup(spec){
   const items=spec.blocks.map((b,i)=>{
     const ex=b[0], name=(EX[ex]||{name:ex}).name;
     let snip=(MARKUP_SNIPPET[ex]||"по описанию упражнения");
-    if(ex==="E13") snip+="\nПриёмов сегодня: "+e13N(spec.code)+".";
+    if(ex==="E13") snip+="\nПриёмов сегодня: "+receptionsFor(spec)+".";
     return `${i+1}. ${name}\n   ${snip.replace(/\n/g,"\n   ")}`;
   });
   return {text:items.join("\n\n"), svg:markupSvg(spec)};
@@ -240,23 +254,31 @@ function dayMarkup(spec){
 /* ================================================================
    РАЗМИНКА (полный текст, показывается в каждом дне)
    ================================================================ */
-function warmupSteps(code){
-  const s=[
-    {t:"Лёгкий бег",min:3,body:"Свободный бег по кругу или вдоль поля.\nМогут разговаривать — значит темп верный."},
-    {t:"Суставная на месте",min:3,body:"По 10 повторов каждое:\nвращения голеностопа, полуприседы, вращения таза,\nнаклоны корпуса вбок, вращения плеч, повороты головы."},
-    {t:"Динамическая в движении",min:4,body:"По 20 м, обратно шагом:\n• Высокое бедро • Захлёст голени\n• Выпады с поворотом корпуса\n• Приставной правым боком • Приставной левым боком\n• «Открой калитку» — колено вперёд и в сторону\n• На носках, затем на пятках"},
-    {t:"Ускорения",min:3,body:"4 отрезка по 20 м: 60%, 70%, 80%, 90%.\nОбратно шагом."},
-    {t:"Мяч",min:2,body:"Перепасовка братьев в движении, 10 м между ними."},
-  ];
-  if(code==="MON") s.push({t:"Прыжки в длину с места",min:1,
-    body:"3 прыжка каждому, 30 секунд.\nНе тренировка — взбадривание нервной системы\nперед скоростным блоком."});
-  if(code==="TUE") s.push({t:"Координационная лестница",min:4,
-    body:"4 варианта по 60 сек, после каждого ускорение 15 м:\n• два шага в ячейку • один шаг, максимально часто\n• боком приставным • внутрь-наружу\nДаниилу хватит 2-3 вариантов, Адриану все четыре.\nЛестница не делает быстрее — задаёт ритм стопы."});
-  return s;
+// Разминка всегда суммируется в WARMUP_MIN[phase] (15 Ф1 / 12 Ф2): добавки
+// ПН/ВТ входят внутрь 15 мин, поэтому базовые шаги подрезаны им навстречу.
+const WU={
+  leg:{t:"Лёгкий бег",min:3,body:"Свободный бег по кругу или вдоль поля.\nМогут разговаривать — значит темп верный."},
+  joints3:{t:"Суставная на месте",min:3,body:"По 10 повторов каждое:\nвращения голеностопа, полуприседы, вращения таза,\nнаклоны корпуса вбок, вращения плеч, повороты головы."},
+  joints2:{t:"Суставная на месте",min:2,body:"По 10 повторов: голеностоп, полуприседы, таз,\nнаклоны вбок, плечи, повороты головы."},
+  dyn4:{t:"Динамическая в движении",min:4,body:"По 20 м, обратно шагом:\n• Высокое бедро • Захлёст голени\n• Выпады с поворотом корпуса\n• Приставной правым боком • Приставной левым боком\n• «Открой калитку» • На носках, затем на пятках"},
+  dyn3:{t:"Динамическая в движении",min:3,body:"По 20 м, обратно шагом:\n• Высокое бедро • Захлёст голени • Выпады с поворотом\n• Приставной обоими боками • «Открой калитку» • Носки/пятки"},
+  acc:{t:"Ускорения",min:3,body:"4 отрезка по 20 м: 60%, 70%, 80%, 90%.\nОбратно шагом."},
+  ball:{t:"Мяч",min:2,body:"Перепасовка братьев в движении, 10 м между ними."},
+  jump:{t:"Прыжки в длину с места",min:1,body:"3 прыжка каждому, 30 секунд.\nНе тренировка — взбадривание нервной системы\nперед скоростным блоком."},
+  ladder:{t:"Координационная лестница",min:4,body:"4 варианта по 60 сек, после каждого ускорение 15 м:\n• два шага в ячейку • один шаг, максимально часто\n• боком приставным • внутрь-наружу\nДаниилу хватит 2-3 вариантов, Адриану все четыре."},
+};
+function warmupSteps(spec){
+  const code=spec.code, phase=spec.phase;
+  if(phase===2) // сокращённая разминка Фазы 2, без блока с мячом = 12 мин
+    return [WU.leg,WU.joints3,WU.dyn3,WU.acc];       // 3+3+3+3 = 12
+  if(code==="MON") return [WU.leg,WU.joints3,WU.dyn3,WU.acc,WU.ball,WU.jump]; // 3+3+3+3+2+1 = 15
+  if(code==="TUE") return [WU.leg,WU.joints2,WU.dyn3,WU.acc,WU.ladder];       // 3+2+3+3+4 = 15
+  return [WU.leg,WU.joints3,WU.dyn4,WU.acc,WU.ball];                          // 3+3+4+3+2 = 15
 }
-function cooldownStep(code){
-  return {t:"Заминка",min:5,body:
-    (code==="FRI"?"Лёгкий бег 3 минуты.":"Лёгкий бег 2 минуты.")+
+function cooldownStep(spec){
+  const min=spec.phase===2?4:5;
+  return {t:"Заминка",min,body:
+    (spec.code==="FRI"?"Лёгкий бег 3 минуты.":"Лёгкий бег 2 минуты.")+
     "\nРастяжка по 20 сек: задняя поверхность бедра,\nикры, пах, квадрицепс."};
 }
 
@@ -284,7 +306,7 @@ const STANCE="Стартовая стойка футбольная: ноги ч�
   "впереди. Тело в напряжении. НЕ стойка бегуна с опорой на руки.";
 
 const EX = {
-E01:{ name:"Старты с 10 метров", type:"time", stop:true, firstRest:true, stance:true,
+E01:{ name:"Старты с 10 метров", type:"time", stopT:0.15, firstRest:true, stance:true,
   setup:"Даниил: 2 фишки, 10 м между ними — его коридор.\nАдриан: рядом, в 3 м вбок, ещё 2 фишки на 10 м.\nТы на общем финише с секундомером, весь день не двигаешься.",
   firstRestText:"Перед первым забегом — 90 секунд полного отдыха.\nНе сразу после разминки. 3 августа во всех сериях лучшее время пришлось на первую попытку.",
   svg:()=>svg(cone(20,40)+cone(250,40)+dim(25,55,245,"10 м")+
@@ -301,7 +323,7 @@ E01:{ name:"Старты с 10 метров", type:"time", stop:true, firstRest:
         ADRIAN:"Больше разворотов спиной: у него это +0.96 при остальных 0.65-0.75. Узкое место — переориентация тела."},
   rec:"Записывается время каждого забега.",
 },
-E02:{ name:"Разгон", type:"time", stop:true, firstRest:true, stance:true,
+E02:{ name:"Разгон", type:"time", stopT:0.15, firstRest:true, stance:true,
   setup:"Даниил, две дорожки на одной линии:\n— фишки 0 и 20 м: забеги с места\n— фишки 10 и 35 м: длинные (замер средних 25 м)\nАдриан: фишки 0, 15 и 20 м. Ты на финише.\n\nДлинный, как мерить: старт с 0, разгон первые 10 м свободно.\nСекундомер ПУСКАЕШЬ на фишке 10 м, СТОП на фишке 35 м.\nБежит 35 м, замер средних 25 м — там он на максимуме.",
   firstRestText:"Перед первым забегом — 90 секунд полного отдыха.",
   svg:()=>svg(cone(15,45)+cone(80,45)+cone(275,45)+
@@ -375,7 +397,7 @@ E10S:{ name:"Удары после ведения", type:"shots",
   diff:{},
   rec:"Сколько попал из 10.",
 },
-E04:{ name:"Слалом", type:"time_goal",
+E04:{ name:"Слалом", type:"time_goal", stopT:0.60,
   setup:"8 фишек в одну линию, между фишками 2 метра — обоим (одна разметка).\nОт последней фишки: Даниилу 15 м до удара, Адриану 10 м.",
   svg:()=>svg([40,70,100,130,160,190,220,250].map(x=>cone(x,60)).join("")+
     dim(40,78,70,"2 м")+mark(20,64,"X")+ball(30,68)+arrow(255,60,290,55)+
@@ -391,7 +413,7 @@ E04:{ name:"Слалом", type:"time_goal",
   diff:{DANIIL:"Один проход из шести только слабой ногой.",ADRIAN:""},
   rec:"Время каждого прохода и гол да/нет.",
 },
-E05:{ name:"Зигзаг с мячом", type:"time_goal",
+E05:{ name:"Зигзаг с мячом", type:"time_goal", stopT:0.60,
   setup:"5 фишек в шахматном порядке.\nДаниилу — 5 м вперёд, 3 м вбок. Адриану — 4 м вперёд, 2.5 м вбок.",
   svg:()=>svg(cone(40,40)+cone(140,40)+cone(240,40)+cone(90,120)+cone(190,120)+
     dim(40,28,140,"5 м")+lbl(250,90,"3 м")+
@@ -426,7 +448,7 @@ E14:{ name:"Обыгрыш лицом", type:"duel_goals", shots:6,
         ADRIAN:"Акцент на вход в штрафную с сохранением корпуса."},
   rec:"Голов из 6 на каждого.",
 },
-E06:{ name:"Челнок 5-10-5", type:"time", stop:true, stance:false,
+E06:{ name:"Челнок 5-10-5", type:"time", stopT:0.30, stance:false,
   setup:"Три фишки в одну линию.\nДаниилу — через 5 м, Адриану — через 4 м.\nИгрок у средней фишки лицом к тебе (перпендикулярно линии фишек).",
   svg:()=>svg(cone(40,80)+cone(150,80)+cone(260,80)+dim(45,98,150,"5 м")+dim(150,98,255,"5 м")+
     mark(143,70,"X")+lbl(130,55,"старт, лицом к тебе")+mark(143,140,"ТЫ")),
@@ -434,8 +456,8 @@ E06:{ name:"Челнок 5-10-5", type:"time", stop:true, stance:false,
     "Касается фишки рукой, наклоняясь.",
     "Разворот на 180°, бег 10 м влево до крайней фишки, касание рукой.",
     "Разворот на 180°, 5 м обратно в центр. Одно повторение = замер.",
-    "Даниил 5 повторов, Адриан 3. Приставными шагами НЕ делаем — это для защитников."],
-  reps_text:"Даниил 5 повторов, Адриан 3.",
+    "5 повторов каждому. Приставными шагами НЕ делаем — это для защитников."],
+  reps_text:"5 повторов каждому. Дистанции: Даниил 5-10-5, Адриан 4-8-4.",
   smotri:"Тормозит на трёх шагах. Стопа при развороте под углом. Корпус низкий в момент разворота.",
   oshibka:"Разворачивается на прямой ноге. Касается фишки ногой вместо руки, теряя корпус.",
   pravilno:"Обратное движение начинается сразу, без паузы.",
@@ -443,7 +465,7 @@ E06:{ name:"Челнок 5-10-5", type:"time", stop:true, stance:false,
   diff:{},
   rec:"Время каждого повторения.",
 },
-E07:{ name:"Разворот по хлопку", type:"time", stance:false,
+E07:{ name:"Разворот по хлопку", type:"time", stopT:0.30, stance:false,
   setup:"Игрок стоит СПИНОЙ к воротам, в 20 м от них (Адриану 15 м).\nТы в 3 м перед ним, лицом к нему, с мячом.\nВажно: здесь ты СПЕРЕДИ, а не за спиной.",
   svg:()=>svg(goal(15,55)+arrow(255,80,40,80)+mark(258,85,"X")+lbl(230,105,"спиной к воротам")+
     mark(200,60,"ТЫ")+ball(195,68)+lbl(150,45,"20 м / 15 м")),
@@ -478,7 +500,7 @@ E10:{ name:"Удары, четыре серии", type:"four",
         ADRIAN:"Серия 1: половина слабой ногой. Ворота — четыре фишки, целится в свой матчевый створ."},
   rec:"Четыре отдельных числа, по одному на серию. Общее не считается.",
 },
-E15:{ name:"Выход после дальнего паса", type:"time_goal",
+E15:{ name:"Выход после дальнего паса", type:"time_goal", stopT:0.50,
   setup:"Игрок на своей половине, в 35 м от ворот (Адриану 20 м).\nСтоит боком или спиной к воротам.\nТы в 10 м от него, с мячом.",
   svg:()=>svg(goal(275,55)+mark(15,120,"X")+lbl(30,138,"боком/спиной")+
     arrow(30,115,270,80)+lbl(120,95,"пас на ход, 35 м с мячом")+
@@ -534,32 +556,43 @@ function slot(player,ex,variant,dist,no,rest,extra){
   return Object.assign({player,ex,variant,dist,attempt_no:no,rest,goal:false,firstRest:false},extra||{});
 }
 function repsFor(code,spec){
-  const R={DANIIL:[],ADRIAN:[]}, hot=(localStorage.getItem("trening_hot")==="1");
+  const R={DANIIL:[],ADRIAN:[]}, p2=(spec.phase===2);
   const push=(pl,arr)=>{R[pl]=arr;};
   if(code==="E01"){
-    push("DANIIL",[["stance",1],["stance",2],["sit_face",3],["sit_face",4],["lie",5],["sit_back",6]]
-      .map(([v,n])=>slot("DANIIL","E01",v,10,n,80)));
-    push("ADRIAN",[["stance",1],["stance",2],["sit_back",3],["sit_back",4],["sit_back",5]]
-      .map(([v,n])=>slot("ADRIAN","E01",v,10,n,80)));
+    // Фаза 2 режет объём: 4/4 вместо 6/5.
+    const dv=p2?[["stance",1],["stance",2],["sit_face",3],["sit_back",4]]
+               :[["stance",1],["stance",2],["sit_face",3],["sit_face",4],["lie",5],["sit_back",6]];
+    const av=p2?[["stance",1],["stance",2],["sit_back",3],["sit_back",4]]
+               :[["stance",1],["stance",2],["sit_back",3],["sit_back",4],["sit_back",5]];
+    push("DANIIL",dv.map(([v,n])=>slot("DANIIL","E01",v,10,n,80)));
+    push("ADRIAN",av.map(([v,n])=>slot("ADRIAN","E01",v,10,n,80)));
     R.DANIIL[0].firstRest=true; R.ADRIAN[0].firstRest=true;
   } else if(code==="E02"){
     const bw=e02Biweekly(spec.iso);
-    const d=[slot("DANIIL","E02","20m",20,1,90),slot("DANIIL","E02","20m",20,2,90),slot("DANIIL","E02","20m",20,3,90),
-      slot("DANIIL","E02","25m_fly",35,4,150),slot("DANIIL","E02","25m_fly",35,5,150),
-      slot("DANIIL","E02", bw?"30m_fly":"25m_fly", bw?40:35,6,150)];
-    push("DANIIL",d);
-    push("ADRIAN",[slot("ADRIAN","E02","15m",15,1,80),slot("ADRIAN","E02","15m",15,2,80),slot("ADRIAN","E02","15m",15,3,80),
-      slot("ADRIAN","E02","20m",20,4,90),slot("ADRIAN","E02","20m",20,5,90)]);
+    if(p2){ // 4/3, без длинных с ходу
+      push("DANIIL",[slot("DANIIL","E02","20m",20,1,90),slot("DANIIL","E02","20m",20,2,90),
+        slot("DANIIL","E02","25m_fly",35,3,150),slot("DANIIL","E02","25m_fly",35,4,150)]);
+      push("ADRIAN",[slot("ADRIAN","E02","15m",15,1,80),slot("ADRIAN","E02","15m",15,2,80),
+        slot("ADRIAN","E02","20m",20,3,90)]);
+    } else {
+      const d=[slot("DANIIL","E02","20m",20,1,90),slot("DANIIL","E02","20m",20,2,90),slot("DANIIL","E02","20m",20,3,90),
+        slot("DANIIL","E02","25m_fly",35,4,150),slot("DANIIL","E02","25m_fly",35,5,150),
+        slot("DANIIL","E02", bw?"30m_fly":"25m_fly", bw?40:35,6,150)];
+      push("DANIIL",d);
+      push("ADRIAN",[slot("ADRIAN","E02","15m",15,1,80),slot("ADRIAN","E02","15m",15,2,80),slot("ADRIAN","E02","15m",15,3,80),
+        slot("ADRIAN","E02","20m",20,4,90),slot("ADRIAN","E02","20m",20,5,90)]);
+    }
   } else if(code==="E06"){
     push("DANIIL",[1,2,3,4,5].map(n=>slot("DANIIL","E06","",5,n,75)));
-    push("ADRIAN",[1,2,3].map(n=>slot("ADRIAN","E06","",4,n,75)));
+    push("ADRIAN",[1,2,3,4,5].map(n=>slot("ADRIAN","E06","",4,n,75)));
   } else if(code==="E07"){
     const mk=(pl,d)=>[...[1,2,3,4,5].map(n=>slot(pl,"E07","spin",d,n,70)),
       ...[6,7,8,9,10].map(n=>slot(pl,"E07","side",d,n,70))];
     push("DANIIL",mk("DANIIL",20)); push("ADRIAN",mk("ADRIAN",15));
   } else if(code==="E04"){
-    push("DANIIL",[1,2,3,4,5,6].map(n=>slot("DANIIL","E04","",15,n,70,{goal:true})));
-    push("ADRIAN",[1,2,3,4,5,6].map(n=>slot("ADRIAN","E04","",10,n,60,{goal:true})));
+    const nn=p2?4:6;  // Фаза 2 — 4 прохода
+    push("DANIIL",Array.from({length:nn},(_,i)=>slot("DANIIL","E04","",15,i+1,70,{goal:true})));
+    push("ADRIAN",Array.from({length:nn},(_,i)=>slot("ADRIAN","E04","",10,i+1,60,{goal:true})));
   } else if(code==="E05"){
     push("DANIIL",[1,2,3,4,5,6].map(n=>slot("DANIIL","E05","",5,n,70,{goal:true})));
     push("ADRIAN",[1,2,3,4,5,6].map(n=>slot("ADRIAN","E05","",4,n,60,{goal:true})));
@@ -626,6 +659,11 @@ function smallActions(){return `<div class="small-actions">
   <button class="ghost small" onclick="showBlockScheme()">Схема</button>
   <button class="ghost small" onclick="askNote()">Заметка</button>
   <button class="warn small" onclick="screenCancel()">Отмена</button></div>`;}
+// Шапка экрана ввода счёта: игрок · упражнение · «Выполнено <word>: N».
+function countHeader(player,exName,n,word){
+  return `<div class="card"><div class="name" style="font-size:22px">${RU[player]||player} · ${exName}</div>
+    <div class="note">Выполнено ${word}: ${n}</div></div>`;
+}
 function askNote(){overlay(`<div class="card"><div class="title">Заметка · к кому?</div>
   <div class="row"><button onclick="noteFor('DANIIL')">Даниил</button>
    <button onclick="noteFor('ADRIAN')">Адриан</button>
@@ -711,15 +749,15 @@ function screenMarkup(){
    ================================================================ */
 function buildSteps(){
   const steps=[];
-  for(const w of warmupSteps(S.spec.code)) steps.push({kind:"timer",title:w.t,mins:w.min,body:w.body});
-  steps.push({kind:"pause"});
+  for(const w of warmupSteps(S.spec)) steps.push({kind:"timer",title:w.t,mins:w.min,body:w.body});
+  // Пауза 1 мин ПЕРЕД каждым упражнением (после разминки и между блоками).
   S.spec.blocks.forEach((b,i)=>{
+    steps.push({kind:"pause"});
     steps.push({kind:"setup",ex:b[0],mins:b[1]});
     steps.push({kind:"what",ex:b[0]});
     steps.push({kind:"work",ex:b[0],mins:b[1]});
-    steps.push({kind:"pause"});
   });
-  const cd=cooldownStep(S.spec.code);
+  const cd=cooldownStep(S.spec);
   steps.push({kind:"timer",title:cd.t,mins:cd.min,body:cd.body});
   steps.push({kind:"summary"});
   S.steps=steps; S.stepIndex=0; S.startMs=performance.now();
@@ -795,7 +833,7 @@ function screenWhat(st){
     <ol>${e.steps.map(s=>`<li>${s}</li>`).join("")}</ol>
     <div class="reps" style="white-space:pre-line">${e.reps_text}${
       (st.ex==="E02"&&e02Biweekly(S.spec.iso))?"\n"+e.biweek_text:""}${
-      (st.ex==="E13")?"\nСегодня приёмов: "+e13N(S.spec.code)+" (шкала голов 0–"+e13N(S.spec.code)+").":""}</div>
+      (st.ex==="E13")?"\nСегодня приёмов: "+receptionsFor(S.spec)+" (шкала голов 0–"+receptionsFor(S.spec)+").":""}</div>
     ${e.stance?`<div class="reps">${STANCE}</div>`:""}
     ${e.req?`<div class="warnbox">${e.req}</div>`:""}
     ${e.hint?`<div class="note">${e.hint}</div>`:""}
@@ -833,18 +871,18 @@ function workDuel(st){
 function workDuelGoals(st){
   const e=EX[st.ex];
   h(`<h1>${e.name}</h1>
-    <div class="card"><div class="badge">${e.shots} подходов каждому</div>
+    <div class="card"><div class="badge">${duelShotsFor(st.ex,S.spec)} подходов каждому</div>
       <div class="note" style="margin-top:8px">${e.reps_text}</div></div>
     <div class="row"><button class="go" onclick="startDuelGoals('${st.ex}')">Ввести результат</button></div>
     ${smallActions()}`);
 }
 function startDuelGoals(ex){
-  S.duelg={ex,shots:EX[ex].shots,player:"DANIIL"}; duelgRender();
+  S.duelg={ex,shots:duelShotsFor(ex,S.spec),player:"DANIIL"}; duelgRender();
 }
 function duelgRender(){
   const d=S.duelg;
-  h(`<h1>${EX[d.ex].name} · ${RU[d.player]}</h1>
-    <div class="note">Сколько забил из ${d.shots}?</div>
+  h(`${countHeader(d.player,EX[d.ex].name,d.shots,"подходов")}
+    <div class="title">Сколько забил из ${d.shots}?</div>
     <div class="gridN">${Array.from({length:d.shots+1},(_,i)=>`<button onclick="duelgSave(${i})">${i}</button>`).join("")}</div>
     ${smallActions()}`);
 }
@@ -1034,9 +1072,10 @@ function setGoal(g){
 function finalizeTime(cur,t){
   const m=S.measure;
   // Стоп-правило (не для E16, только для stop-упражнений, время задано).
-  if(t!==null && EX[cur.ex].stop){
+  const th=EX[cur.ex].stopT;
+  if(t!==null && th){
     const b=m.best[cur.player];
-    if(b!==null && Math.round((t-b)*100)/100>=0.15) return screenStopRule(cur,b,t);
+    if(b!==null && Math.round((t-b)*100)/100>=th) return screenStopRule(cur,b,t);
     m.best[cur.player]=(b===null)?t:Math.min(b,t);
   } else if(t!==null){
     const b=m.best[cur.player]; m.best[cur.player]=(b===null)?t:Math.min(b,t);
@@ -1061,26 +1100,27 @@ function continueSeries(){const m=S.measure,cur=m.order[m.pos];
 
 /* ---- shots: попал из N (E10S, поток Адриана в E16) ---- */
 function workShots(st){ // оба игрока по очереди
-  S.shots={ex:st.ex,player:"DANIIL",distByPlayer:{DANIIL:15,ADRIAN:12}};
+  S.shots={ex:st.ex,player:"DANIIL",N:e10sShots(S.spec),distByPlayer:{DANIIL:15,ADRIAN:12}};
   shotsRender();
 }
 function shotsRender(){
   const s=S.shots;
-  h(`<h1>${EX[s.ex].name} · ${RU[s.player]}</h1>
-    <div class="note">Сколько попал из 10</div>
-    <div class="gridN">${Array.from({length:11},(_,i)=>`<button onclick="shotsSave(${i})">${i}</button>`).join("")}</div>
+  h(`${countHeader(s.player,EX[s.ex].name,s.N,"ударов")}
+    <div class="title">Сколько попал из ${s.N}?</div>
+    <div class="gridN">${Array.from({length:s.N+1},(_,i)=>`<button onclick="shotsSave(${i})">${i}</button>`).join("")}</div>
     ${smallActions()}`);
 }
 function shotsSave(g){const s=S.shots;
-  pushAttempt({player:s.player,ex:s.ex,variant:"",goals:g,shots:10,dist:s.distByPlayer[s.player]});
+  pushAttempt({player:s.player,ex:s.ex,variant:"",goals:g,shots:s.N,dist:s.distByPlayer[s.player]});
   if(s.player==="DANIIL"){s.player="ADRIAN";return shotsRender();}
   delete S.shots; nextStep();
 }
 // Одиночный поток ударов (Адриан внутри «Повторного рывка»).
 function workShotsSingle(player,ex,dist,variant,title,done){
   S._single={player,ex,dist,variant,done};
-  h(`<h1>${title}</h1>
-    <div class="note">Сколько попал из 10</div>
+  h(`${countHeader(player,EX[ex].name,10,"ударов")}
+    <div class="note">${title}</div>
+    <div class="title">Сколько попал из 10?</div>
     <div class="gridN">${Array.from({length:11},(_,i)=>`<button onclick="singleSave(${i})">${i}</button>`).join("")}</div>
     ${smallActions()}`);
 }
@@ -1091,20 +1131,22 @@ function singleSave(g){const s=S._single;
 
 /* ---- control: контроль 1-5 + голы из N (E13) ---- */
 function workControl(st){
-  const N=e13N(S.spec.code);
+  const N=receptionsFor(S.spec);
   S.ctrl={ex:st.ex,player:"DANIIL",N,stage:"c"};
   ctrlRender();
 }
 function ctrlRender(){
   const c=S.ctrl;
+  const head=countHeader(c.player,"Приём под опекой",c.N,"приёмов");
   if(c.stage==="c"){
-    h(`<h1>${EX[c.ex].name} · ${RU[c.player]}</h1>
-      <div class="note">Контроль мяча (1-5)</div>
+    h(`${head}
+      <div class="title">Контроль мяча под давлением</div>
+      <div class="note">1 — терял · 5 — держал уверенно</div>
       <div class="grid5">${[1,2,3,4,5].map(v=>`<button onclick="ctrlC(${v})">${v}</button>`).join("")}</div>
       ${smallActions()}`);
   } else {
-    h(`<h1>${EX[c.ex].name} · ${RU[c.player]}</h1>
-      <div class="note">Голов из ${c.N}</div>
+    h(`${head}
+      <div class="title">Сколько забил из ${c.N}?</div>
       <div class="gridN">${Array.from({length:c.N+1},(_,i)=>`<button onclick="ctrlG(${i})">${i}</button>`).join("")}</div>
       ${smallActions()}`);
   }
@@ -1133,8 +1175,9 @@ function fourSet(kind){
   const f=S.four; f.kind=kind;
   const distM=f.player==="DANIIL"?(kind==="near"?15:22):(kind==="near"?13:16);
   const max=[8,10,10,12][f.series-1]; f.distM=distM; f.max=max;
-  h(`<h1>Голы · ${RU[f.player]} · серия ${f.series}/4</h1>
-    <div class="note">${kind==="near"?"ближняя":"дальняя"} · из ${max}</div>
+  h(`${countHeader(f.player,"Удары, серия "+f.series+"/4",max,"ударов")}
+    <div class="title">Сколько забил из ${max}?</div>
+    <div class="note">${kind==="near"?"ближняя":"дальняя"}</div>
     <div class="gridN">${Array.from({length:max+1},(_,i)=>`<button onclick="fourSave(${i})">${i}</button>`).join("")}</div>
     ${smallActions()}`);
 }
