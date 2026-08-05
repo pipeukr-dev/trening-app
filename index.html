@@ -94,6 +94,8 @@ if (tg) { try { tg.ready(); tg.expand(); } catch(e){} }
 
 const PLAYERS = ["DANIIL","ADRIAN"];
 const RU = {DANIIL:"ДАНИИЛ", ADRIAN:"АДРИАН"};
+// Упражнения с мячом, где возможна потеря мяча (кнопка на экране замера).
+const LOST_EXERCISES = new Set(["E04","E05","E07","E15","E16","E10S"]);
 
 /* ---------- Звук и вибрация ---------- */
 function soundOn(){ return localStorage.getItem("trening_sound")!=="off"; }
@@ -564,7 +566,8 @@ function pushAttempt(o){
     time_sec:(o.time_sec!==undefined&&o.time_sec!==null)?Number(Number(o.time_sec).toFixed(2)):null,
     distance_m:o.dist||o.distance_m||null,control:o.control??null,goals:o.goals??null,
     shots:o.shots??null,wellbeing:o.wellbeing??null,
-    shortened:(S.spec.shortened||S.shortened||false),note:o.note||"",uploaded:false};
+    shortened:(S.spec.shortened||S.shortened||false),note:o.note||"",
+    lost:!!o.lost,uploaded:false};
   a.push(rec); saveAttempts(a); S.attempts.push(rec); saveSession(); return rec;
 }
 function writeWellbeing(){ for(const pl of PLAYERS){ if(S.wellbeing[pl]!==undefined)
@@ -572,7 +575,7 @@ function writeWellbeing(){ for(const pl of PLAYERS){ if(S.wellbeing[pl]!==undefi
 function recordFor(player,ex,variant){const r=records()[player]; if(!r)return null;
   return r[ex+"|"+(variant||"")]??null;}
 function prevToday(player,ex,variant){
-  const l=S.attempts.filter(a=>a.player===player&&a.exercise_id===ex&&(a.variant||"")===(variant||"")&&a.time_sec!==null);
+  const l=S.attempts.filter(a=>a.player===player&&a.exercise_id===ex&&(a.variant||"")===(variant||"")&&a.time_sec!==null&&!a.lost);
   return l.length?l[l.length-1].time_sec:null;}
 
 /* ================================================================
@@ -876,8 +879,9 @@ function screenStopwatch(cur,ready10){
     <div class="note">${nextInfo}</div>
     <div class="row">
       <button class="ghost small" onclick="notMeasured()">Не засёк</button>
-      <button class="ghost small" onclick="manualEntry()">Ручной ввод</button>
+      ${LOST_EXERCISES.has(cur.ex)?`<button class="warn small" onclick="lostBall()">Потерял мяч</button>`:""}
       <button class="ghost small" onclick="measureBack()">Назад</button></div>
+    <div class="row"><button class="ghost small" onclick="manualEntry()">Ручной ввод</button></div>
     ${smallActions()}`);
   S.watch={running:false,t0:0,cur};
 }
@@ -922,6 +926,19 @@ function recordTime(t,nm){
   // time_goal: после секундомера — экран гола.
   if(m.type==="time_goal" && t!==null){ return screenGoalAsk(cur,t); }
   finalizeTime(cur,t);
+}
+// Потеря мяча: если секундомер идёт — фиксируем текущее время, иначе без времени.
+// Попытка помечается lost=true и не влияет на лучшее/среднее/разброс/стоп-правило.
+function lostBall(){
+  const w=S.watch, m=S.measure, cur=m.order[m.pos];
+  let t=null;
+  if(w&&w.running){ w.running=false; if(w.raf)cancelAnimationFrame(w.raf);
+    t=(performance.now()-w.t0)/1000; }
+  pushAttempt({player:cur.player,ex:cur.ex,variant:cur.variant,attempt_no:cur.attempt_no,
+    time_sec:t,dist:cur.dist,lost:true,note:"потеря мяча"});
+  // Ни стоп-правила, ни экрана гола: потеря — это отсутствие завершения.
+  m.readyAt[cur.player]=Date.now()+(cur.rest||60)*1000;
+  m.pos++; saveSession(); measureAdvance();
 }
 function screenGoalAsk(cur,t){
   h(`<h1>Гол?</h1>
@@ -1076,7 +1093,8 @@ function screenSummary(){
 }
 function summaryCard(pl){
   // Карточка одного игрока: лучшее время по упражнениям + суммы голов.
-  const times=S.attempts.filter(a=>a.player===pl&&a.time_sec!==null);
+  // Потери мяча в лучшее не входят.
+  const times=S.attempts.filter(a=>a.player===pl&&a.time_sec!==null&&!a.lost);
   const byExT={}; for(const a of times){(byExT[a.exercise_id]=byExT[a.exercise_id]||[]).push(a.time_sec);}
   const nameOf=ex=>(EX[ex]||EX[ex.replace(/_[DA]$/,"")]||{name:ex}).name;
   let rows=Object.keys(byExT).map(ex=>`<div>${nameOf(ex)}: лучшее ${Math.min(...byExT[ex]).toFixed(2)}</div>`).join("");
@@ -1085,6 +1103,8 @@ function summaryCard(pl){
   const byExG={}; for(const a of goalsAtt){const k=a.exercise_id;
     byExG[k]=byExG[k]||{g:0,s:0}; byExG[k].g+=a.goals; byExG[k].s+=a.shots;}
   rows+=Object.keys(byExG).map(ex=>`<div>${nameOf(ex)}: голы ${byExG[ex].g} из ${byExG[ex].s}</div>`).join("");
+  const lost=S.attempts.filter(a=>a.player===pl&&a.lost).length;
+  if(lost>0)rows+=`<div>Потерь мяча: ${lost}</div>`;
   if(!rows)rows='<div class="note">Замеров нет.</div>';
   return `<div class="card"><div class="name">${RU[pl]}</div>${rows}</div>`;
 }
@@ -1203,7 +1223,7 @@ function screenLast(){
   if(!last){h(`<h1>Последнее занятие</h1><div class="note">Данных нет.</div>
     <div class="row"><button class="go" onclick="screenHome()">Назад</button></div>`);return;}
   const cards=PLAYERS.map(pl=>{
-    const list=a.filter(x=>x.date===last&&x.player===pl&&x.time_sec!==null);
+    const list=a.filter(x=>x.date===last&&x.player===pl&&x.time_sec!==null&&!x.lost);
     const byEx={};list.forEach(x=>{(byEx[x.exercise_id]=byEx[x.exercise_id]||[]).push(x.time_sec);});
     const rows=Object.keys(byEx).map(ex=>{const nm=(EX[ex]||{name:ex}).name;
       return `<div>${nm}: ${Math.min(...byEx[ex]).toFixed(2)}</div>`;}).join("");
