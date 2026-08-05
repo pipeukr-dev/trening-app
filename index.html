@@ -620,7 +620,7 @@ function screenHome(){
       <div class="note">${spec.reason||""}</div></div>
     <div class="row"><button class="go" onclick="startFlow()" ${spec.has?"":"disabled"}>▶ Начать тренировку</button></div>
     ${n>0?`<div class="row"><button onclick="uploadAll()">Выгрузить: ${n} записей</button></div>`:""}
-    ${(n>0&&localStorage.getItem("trening_downloaded")==="1")?
+    ${(n>0&&localStorage.getItem("trening_copied")==="1")?
       `<div class="row"><button class="go" onclick="confirmMark()">Отметить выгруженным</button></div>`:""}
     ${spec.phase===2?`<div class="row"><button class="ghost" onclick="screenWeek()">Расписание на неделю</button></div>`:""}
     <div class="row"><button class="ghost" onclick="toggleSound()">Звук: ${soundOn()?"вкл":"выкл"}</button>
@@ -1094,33 +1094,44 @@ function buildPayload(){
   return {records:pending.map(a=>{const{uploaded,...r}=a;return r;}),
     context:{club_days:[...c.club],match_days:[...c.match]}};
 }
-// Пометить всё выгруженным (после подтверждения приёма ботом) и снять флаг файла.
+// Пометить всё выгруженным (после подтверждения приёма ботом) и снять флаг.
 function markUploaded(){ const all=loadAttempts();
   all.forEach(a=>{if(!a.uploaded)a.uploaded=true;}); saveAttempts(all);
-  localStorage.removeItem("trening_downloaded"); }
+  localStorage.removeItem("trening_copied"); }
 function screenSent(n){
   h(`<h1>Отправлено</h1><div class="card center">
     <div class="big">${n}</div><div style="font-size:22px">записей отправлено</div></div>
     <div class="row"><button class="go" onclick="screenHome()">Готово</button></div>`);
 }
-function uploadFilename(pending){
-  const dates=[...new Set(pending.map(a=>a.date))].sort();
-  const earliest=dates[0]||dateToIso(new Date());
-  return dates.length>1 ? `trening-${earliest}-${pending.length}.json`
-                        : `trening-${earliest}.json`;
-}
-function downloadFile(name,text){
-  const blob=new Blob([text],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),1500);
-}
-function screenFileSaved(){
-  h(`<h1>Файл сохранён</h1>
-    <div class="card"><div style="font-size:21px">Открой чат с ботом, нажми скрепку
-      и отправь этот файл.</div></div>
+function screenCopied(){
+  h(`<h1>Скопировано</h1>
+    <div class="card"><div style="font-size:21px">Вставь боту в чат одним сообщением
+      и отправь.</div></div>
     <div class="row"><button class="go" onclick="screenHome()">Понятно</button></div>`);
+}
+// Показать текст с автовыделением — последний резерв, если копирование недоступно.
+function screenCopyManual(text){
+  h(`<h1>Скопируй вручную</h1>
+    <div class="note">Выдели весь текст и скопируй, затем вставь боту в чат.</div>
+    <textarea id="cptext" readonly style="min-height:180px"></textarea>
+    <div class="row"><button class="go" onclick="screenHome()">Готово</button></div>`);
+  const ta=document.getElementById("cptext"); if(ta){ta.value=text; ta.focus(); ta.select();}
+}
+function copyText(text,onOk,onFail){
+  // 1) современный API
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(onOk,()=>legacyCopy(text,onOk,onFail));
+  } else { legacyCopy(text,onOk,onFail); }
+}
+function legacyCopy(text,onOk,onFail){
+  // 2) скрытый textarea + execCommand
+  try{
+    const ta=document.createElement("textarea");
+    ta.value=text; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    const ok=document.execCommand("copy"); ta.remove();
+    if(ok) onOk(); else onFail();
+  }catch(e){ onFail(); }
 }
 function uploadAll(){
   const pending=loadAttempts().filter(a=>!a.uploaded);
@@ -1130,11 +1141,10 @@ function uploadAll(){
   if(tg&&tg.sendData&&body.length<3800){
     try{ tg.sendData(body); markUploaded(); screenSent(pending.length); return; }catch(_){}
   }
-  // Основной путь: скачать файл. Выгруженным НЕ помечаем — только после
-  // того, как тренер подтвердит приём кнопкой «Отметить выгруженным».
-  downloadFile(uploadFilename(pending), body);
-  localStorage.setItem("trening_downloaded","1");
-  screenFileSaved();
+  // Основной путь: копируем весь JSON в буфер. Выгруженным НЕ помечаем —
+  // только после подтверждения кнопкой «Отметить выгруженным».
+  localStorage.setItem("trening_copied","1");
+  copyText(body, screenCopied, ()=>screenCopyManual(body));
 }
 // Ручная отметка после подтверждения ботом.
 function confirmMark(){
@@ -1201,7 +1211,7 @@ function confirmReset(){
       <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
 }
 function resetData(){
-  ["trening_attempts","trening_records","trening_ctx","trening_session","trening_hot"].forEach(k=>localStorage.removeItem(k));
+  ["trening_attempts","trening_records","trening_ctx","trening_session","trening_hot","trening_copied"].forEach(k=>localStorage.removeItem(k));
   if(sessionTimer){clearInterval(sessionTimer);sessionTimer=null;} S=null;
   closeOverlay(); screenHome();
 }
