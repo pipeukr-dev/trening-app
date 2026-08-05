@@ -83,7 +83,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
 
    Перед каждым упражнением — ТРИ экрана: Расстановка → Что делать →
    Работа. Пробных попыток нет. Занятие идёт офлайн, копится в
-   localStorage, вечером — [Загрузить] боту.
+   localStorage, вечером — [Выгрузить] боту (файлом).
 
    ГЛАВНОЕ ПРАВИЛО: братья не сравниваются. Один выполняет → тренер
    записал → потом второй. Итоги — отдельными карточками. Имена рядом
@@ -619,8 +619,9 @@ function screenHome(){
       <div class="title">${spec.has?spec.goal:"Занятия нет"}</div>
       <div class="note">${spec.reason||""}</div></div>
     <div class="row"><button class="go" onclick="startFlow()" ${spec.has?"":"disabled"}>▶ Начать тренировку</button></div>
-    ${n>0?`<div class="row"><button onclick="uploadAll()">Загрузить: ${n} записей</button></div>
-      <div class="row"><button class="ghost" onclick="showPayload()">JSON для /import</button></div>`:""}
+    ${n>0?`<div class="row"><button onclick="uploadAll()">Выгрузить: ${n} записей</button></div>`:""}
+    ${(n>0&&localStorage.getItem("trening_downloaded")==="1")?
+      `<div class="row"><button class="go" onclick="confirmMark()">Отметить выгруженным</button></div>`:""}
     ${spec.phase===2?`<div class="row"><button class="ghost" onclick="screenWeek()">Расписание на неделю</button></div>`:""}
     <div class="row"><button class="ghost" onclick="toggleSound()">Звук: ${soundOn()?"вкл":"выкл"}</button>
       <button class="ghost" onclick="screenImport()">Импорт рекордов</button></div>
@@ -1070,7 +1071,7 @@ function screenSummary(){
   // Отдельная карточка на игрока. Никаких сравнений.
   const cards=PLAYERS.map(pl=>summaryCard(pl)).join("");
   h(`<h1>Итог занятия</h1>${cards}
-    <div class="row"><button class="go" onclick="uploadAll()">Загрузить сейчас</button>
+    <div class="row"><button class="go" onclick="uploadAll()">Выгрузить сейчас</button>
       <button class="ghost" onclick="finishLater()">Позже</button></div>`);
 }
 function summaryCard(pl){
@@ -1093,31 +1094,56 @@ function buildPayload(){
   return {records:pending.map(a=>{const{uploaded,...r}=a;return r;}),
     context:{club_days:[...c.club],match_days:[...c.match]}};
 }
-function uploadAll(){
-  const all=loadAttempts(), pending=all.filter(a=>!a.uploaded);
-  if(!pending.length){toast("Нет несинхронизированных записей.");return;}
-  const payload=buildPayload();
-  if(tg&&tg.sendData){ tg.sendData(JSON.stringify(payload));
-    all.forEach(a=>{if(!a.uploaded)a.uploaded=true;}); saveAttempts(all);
-  } else {
-    overlay(`<div class="card"><div class="title">Нет Telegram. Полезная нагрузка:</div>
-      <pre class="reps">${JSON.stringify(payload,null,1).replace(/</g,"&lt;")}</pre>
-      <div class="row"><button class="go" onclick="closeOverlay()">Ок</button></div></div>`);
-  }
+// Пометить всё выгруженным (после подтверждения приёма ботом) и снять флаг файла.
+function markUploaded(){ const all=loadAttempts();
+  all.forEach(a=>{if(!a.uploaded)a.uploaded=true;}); saveAttempts(all);
+  localStorage.removeItem("trening_downloaded"); }
+function screenSent(n){
+  h(`<h1>Отправлено</h1><div class="card center">
+    <div class="big">${n}</div><div style="font-size:22px">записей отправлено</div></div>
+    <div class="row"><button class="go" onclick="screenHome()">Готово</button></div>`);
 }
-function showPayload(){
+function uploadFilename(pending){
+  const dates=[...new Set(pending.map(a=>a.date))].sort();
+  const earliest=dates[0]||dateToIso(new Date());
+  return dates.length>1 ? `trening-${earliest}-${pending.length}.json`
+                        : `trening-${earliest}.json`;
+}
+function downloadFile(name,text){
+  const blob=new Blob([text],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+}
+function screenFileSaved(){
+  h(`<h1>Файл сохранён</h1>
+    <div class="card"><div style="font-size:21px">Открой чат с ботом, нажми скрепку
+      и отправь этот файл.</div></div>
+    <div class="row"><button class="go" onclick="screenHome()">Понятно</button></div>`);
+}
+function uploadAll(){
   const pending=loadAttempts().filter(a=>!a.uploaded);
   if(!pending.length){toast("Нет несинхронизированных записей.");return;}
-  const s=JSON.stringify(buildPayload());
-  overlay(`<div class="card"><div class="title">Запасной путь</div>
-    <div class="note">Боту: /import, затем этот текст.</div>
-    <textarea readonly onclick="this.select()">${s.replace(/</g,"&lt;")}</textarea>
-    <div class="row"><button class="go" onclick="copyPayload('${encodeURIComponent(s)}')">Скопировать</button>
-      <button class="ghost" onclick="closeOverlay()">Готово</button></div></div>`);
+  const body=JSON.stringify(buildPayload());
+  // Тихий резерв: sendData, если он есть и payload помещается в лимит Telegram.
+  if(tg&&tg.sendData&&body.length<3800){
+    try{ tg.sendData(body); markUploaded(); screenSent(pending.length); return; }catch(_){}
+  }
+  // Основной путь: скачать файл. Выгруженным НЕ помечаем — только после
+  // того, как тренер подтвердит приём кнопкой «Отметить выгруженным».
+  downloadFile(uploadFilename(pending), body);
+  localStorage.setItem("trening_downloaded","1");
+  screenFileSaved();
 }
-function copyPayload(enc){const t=decodeURIComponent(enc);
-  if(navigator.clipboard)navigator.clipboard.writeText(t).then(()=>toast("Скопировано."),()=>toast("Выделите вручную."));
-  else toast("Выделите вручную.");}
+// Ручная отметка после подтверждения ботом.
+function confirmMark(){
+  overlay(`<div class="card"><div class="title">Бот подтвердил приём?</div>
+    <div class="note">Записи будут помечены как выгруженные.</div>
+    <div class="row"><button class="go" onclick="doMark()">Да</button>
+      <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
+}
+function doMark(){ markUploaded(); closeOverlay(); screenHome(); }
 
 /* ================================================================
    РАСПИСАНИЕ, ИМПОРТ, ПОСЛЕДНЕЕ, СБРОС
