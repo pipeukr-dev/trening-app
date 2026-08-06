@@ -4,7 +4,7 @@
 // Имя кэша версионное: deploy.sh подставляет метку сборки в строку ниже
 // (она же меняет байты sw.js, из-за чего браузер ставит новый воркер).
 // Старые кэши удаляются в activate, поэтому обновление доходит с первого раза.
-const BUILD = '20260806-2304-2eeeb10';
+const BUILD = '20260806-2349-d2ffaca';
 const CACHE = 'trening-' + BUILD;
 const SHELL = './index.html';
 const ASSETS = ['./', SHELL];
