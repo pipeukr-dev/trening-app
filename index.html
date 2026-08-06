@@ -70,16 +70,19 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
 .small-actions button{min-height:44px;font-size:14px}
 .reps{background:#fffef8;border:2px solid var(--line);border-radius:10px;padding:8px;margin:6px 0}
 .build{color:var(--muted);font-size:12px;text-align:center;margin-top:8px}
+.build button{margin-left:8px;min-height:32px;font-size:12px;padding:4px 10px}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script>
 "use strict";
-/* Метка сборки. deploy.sh заменяет всю строку целиком (якорь — начало
-   строки «const BUILD = »), тем же значением, что попадает в имя кэша sw.js.
-   Локально остаётся 'dev'. Показывается внизу главного экрана. */
-const BUILD = '20260806-2349-d2ffaca';
+/* Метка сборки: дата, время и хэш содержимого. deploy.sh заменяет всю
+   строку целиком (якорь — начало строки «const BUILD = ») тем же значением,
+   что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
+   Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
+   сразу видно, какая версия загружена на телефоне. */
+const BUILD = '20260807-0010-12f6890';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -761,7 +764,35 @@ function screenHome(){
       <button class="ghost" onclick="confirmReset()">Сбросить данные</button></div>
     <div class="foot note center">Занятие идёт офлайн. Загрузка — вечером.
     Открывайте кнопкой «⚽ Тренировка» — из неё работает выгрузка.</div>
-    <div class="build">${buildLabel()}</div>`);
+    <div class="build">${buildLabel()}
+      <button class="ghost small" onclick="confirmUpdate()">Обновить</button></div>`);
+}
+/* Ручное обновление: если телефон всё же держит старую сборку. Сносит кэши
+   и воркер и перезагружает страницу с сервера. Данные занятий лежат в
+   localStorage и не трогаются. Только при сети: без неё это оставило бы
+   приложение без офлайн-кэша прямо на поле. */
+function confirmUpdate(){
+  if(navigator.onLine===false){
+    return overlay(`<div class="card"><div class="title">Нет сети</div>
+      <div class="note">Обновление возможно только с интернетом: без него
+      приложение осталось бы без офлайн-кэша.</div>
+      <div class="row"><button class="ghost" onclick="closeOverlay()">Понятно</button></div></div>`);
+  }
+  overlay(`<div class="card"><div class="title">Обновить приложение?</div>
+    <div class="note">Сейчас: ${buildLabel()}.<br>Страница перезагрузится с сервера.
+    Записи занятий и рекорды сохранятся.</div>
+    <div class="row"><button class="go" onclick="forceUpdate()">Обновить</button>
+      <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
+}
+function forceUpdate(){
+  const reload=()=>location.replace(location.pathname+"?u="+Date.now());
+  const jobs=[];
+  if(window.caches&&caches.keys)
+    jobs.push(caches.keys().then(ks=>Promise.all(ks.map(k=>caches.delete(k)))));
+  if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations)
+    jobs.push(navigator.serviceWorker.getRegistrations()
+      .then(rs=>Promise.all(rs.map(r=>r.unregister()))));
+  Promise.all(jobs).then(reload,reload);
 }
 function startFlow(){ screenDayConfirm(determineDay(dateToIso(new Date()))); }
 function screenDayConfirm(spec){
@@ -1651,10 +1682,22 @@ function resume(){closeOverlay();S=JSON.parse(localStorage.getItem("trening_sess
 function dropSession(){closeOverlay();clearSession();screenHome();}
 
 if('serviceWorker' in navigator){
-  // updateViaCache:'none' — сам sw.js берётся из сети, а не из HTTP-кэша,
-  // иначе новая сборка ждала бы протухания кэша браузера.
+  // Адрес регистрации версионный (./sw.js?v=BUILD): при деплое меняется сам
+  // URL скрипта, поэтому браузер обязан сходить за ним на сервер, даже если
+  // старый sw.js ещё лежит у него в HTTP-кэше. updateViaCache:'none' — то же
+  // самое для последующих проверок обновления.
+  const hadController=!!navigator.serviceWorker.controller;
+  let reloadedForUpdate=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    // Управление перехватила новая сборка. Перезагружаем страницу, иначе на
+    // экране осталась бы старая оболочка. НИКОГДА посреди занятия: там идёт
+    // секундомер — незаконченное занятие обновится при следующем открытии.
+    if(!hadController||reloadedForUpdate)return;
+    if(localStorage.getItem("trening_session"))return;
+    reloadedForUpdate=true; location.reload();
+  });
   window.addEventListener('load',()=>navigator.serviceWorker
-    .register('./sw.js',{updateViaCache:'none'})
+    .register('./sw.js?v='+BUILD,{updateViaCache:'none'})
     .then(r=>r.update().catch(()=>{})).catch(()=>{}));
 }
 boot();
