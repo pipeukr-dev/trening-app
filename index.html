@@ -96,6 +96,18 @@ const PLAYERS = ["DANIIL","ADRIAN"];
 const RU = {DANIIL:"ДАНИИЛ", ADRIAN:"АДРИАН"};
 // Упражнения с мячом, где возможна потеря мяча (кнопка на экране замера).
 const LOST_EXERCISES = new Set(["E04","E05","E15","E16","E10S"]);
+// Подсерии «Ударов» (E10): 9 × 5 = 45 ударов на игрока (dupl. bot/catalog.py).
+const E10_SUB=[
+  {v:"s1_near",series:1,kind:"ближняя",timed:false,dist:{DANIIL:15,ADRIAN:13}},
+  {v:"s1_far",series:1,kind:"дальняя",timed:false,dist:{DANIIL:22,ADRIAN:16}},
+  {v:"s2_near",series:2,kind:"ближняя",timed:false,dist:{DANIIL:15,ADRIAN:13}},
+  {v:"s2_far",series:2,kind:"дальняя",timed:false,dist:{DANIIL:22,ADRIAN:16}},
+  {v:"s3_right",series:3,kind:"справа",timed:false,dist:{DANIIL:10,ADRIAN:8}},
+  {v:"s3_left",series:3,kind:"слева",timed:false,dist:{DANIIL:10,ADRIAN:8}},
+  {v:"s4_left",series:4,kind:"слева",timed:true,dist:{DANIIL:17,ADRIAN:13}},
+  {v:"s4_center",series:4,kind:"центр",timed:true,dist:{DANIIL:17,ADRIAN:13}},
+  {v:"s4_right",series:4,kind:"справа",timed:true,dist:{DANIIL:17,ADRIAN:13}},
+];
 
 /* ---------- Звук и вибрация ---------- */
 function soundOn(){ return localStorage.getItem("trening_sound")!=="off"; }
@@ -136,7 +148,7 @@ const P1_MATRIX={
   MON:["Скорость и первый шаг",[["E01",14],["E02",15],["E13",13],["E12",9],["E10S",9]]],
   TUE:["Дриблинг и быстрые ноги",[["E04",15],["E05",15],["E14",14],["E10S",12]]],
   WED:["Смена направления",[["E06",12],["E13",18],["E14",14],["E12",12]]],
-  THU:["Контроль и завершение",[["E07",16],["E10",32],["E13",9]]],
+  THU:["Контроль и завершение",[["E07",19],["E10",45],["E13",8]]],
   FRI:["Отрыв и повторный рывок",[["E15",25],["E16",16],["E13",16]]],
 };
 // Фаза 2 — два блока, короткое занятие (35 мин).
@@ -222,7 +234,7 @@ const MARKUP_SNIPPET = {
   E05: "5 фишек в шахматном порядке:\nДаниилу 5 м вперёд и 3 м вбок, Адриану 4 м вперёд и 2.5 м вбок. Ворота.",
   E06: "3 фишки в линию: Даниилу через 5 м, Адриану через 4 м.\nИгрок стартует от средней, лицом к тебе.",
   E07: "Принимающий спиной к воротам: Даниил в 20 м, Адриан в 15 м. Ворота.\nТы за его спиной, в 1-2 м (меняешь сторону).\nВторой брат пасует в ноги, в 10 м перед ним (Адриану 8 м). Потом меняются.",
-  E10: "Точки удара: Даниил 14-15 и 20-25 м, Адриан 11-14 и 15-18 м.\nДля Адриана 4 фишки в воротах: две сужают створ, две внутри — углы. Ворота.",
+  E10: "4 серии по 5+5 (рывок 5×3), 45 ударов.\nС места/после приёма: Даниил ближняя 14-15 / дальняя 20-25 м, Адриан 11-14 / 15-18 м.\nФланг: старт от штрафной, удар Даниил ~10 м, Адриан ~8 м.\nРывок: старт 28/22 м, удар с 16-18 / 12-14 м, отдых 25 сек, замер времени.\nАдриану 4 фишки в воротах (сужают створ + углы). Ворота.",
   E10S: "Мяч в 25 м; точка удара — фишка: Даниилу 15 м, Адриану 12 м от ворот. Ворота.",
   E12: "Игрок с мячом в 20 м от ворот.\nТы в двух метрах позади и сбоку.",
   E13: "Игрок спиной к воротам, в 16-18 м от них.\nПасующий в 12 м перед ним, лицом к воротам.\nТы за спиной принимающего.",
@@ -477,34 +489,35 @@ E07:{ name:"Разворот", type:"shots", shotsWord:"приёмов", shotsVe
     "Брат катит мяч В НОГИ по земле, средней силы — ровно в ноги.",
     "Первым касанием принимающий уводит мяч в сторону, свободную от тебя.",
     "Вторым касанием бьёт по воротам. Два касания: принял — пробил.",
-    "8 приёмов каждому, затем братья меняются местами."],
-  reps_text:"8 приёмов каждому. Затем меняются: кто пасовал — принимает.",
+    "10 приёмов каждому, затем братья меняются местами."],
+  reps_text:"10 приёмов каждому. Затем меняются: кто пасовал — принимает.",
   smotri:"Оглянулся через плечо ДО паса или нет — это главное. Оглянулся — уведёт мяч в правильную сторону.",
   oshibka:"Не посмотрел назад, развернулся вслепую. Принял, остановился, потом разворот. Три и больше касаний.",
   pravilno:"Два касания: первым увёл мяч от тебя, вторым пробил.",
   match:"Оба — центральные нападающие. Мяч приходит спиной к воротам почти в каждой атаке, защитник сзади. Кто оглянулся заранее — развернулся и пробил. 20 м — рабочая дистанция удара (Адриан 15).",
   diff:{DANIIL:"Ты стоишь плотнее и активнее смещаешься за спиной — пространства меньше.",
         ADRIAN:"Ты обозначаешь позицию, стоишь спокойнее."},
-  rec:"Голов из 8 на каждого.",
+  rec:"Голов из 10 на каждого.",
 },
-E10:{ name:"Удары, четыре серии", type:"four",
-  setup:"Ворота Адриана — четыре фишки: две сужают до его матчевой ширины,\nещё две внутри (в метре) обозначают углы. Он бьёт между внутренней и сужающей.\nДистанции выбираешь перед каждой серией.",
+E10:{ name:"Удары", type:"four",
+  setup:"45 ударов на игрока, 4 серии по подсериям (по 5 ударов).\nВорота Адриана — четыре фишки: две сужают створ до его матчевой\nширины, две внутри обозначают углы; бьёт между внутренней и сужающей.\nУчёт голов после каждой подсерии из 5.",
   svg:()=>svg(goal(20,40)+goal(273,40)+
     cone(60,45)+cone(90,45)+cone(210,45)+cone(240,45)+
     lbl(55,95,"ф")+lbl(85,95,"ф")+lbl(205,95,"ф")+lbl(235,95,"ф")+
     lbl(95,115,"цель — между фишками, углы его створа")),
-  steps:["Серия 1 · с места · 8 · только ближняя. Мяч лежит, опорная нога рядом.",
-    "Серия 2 · после приёма · 10. Ты пасуешь, максимум 3 касания, третье — удар. Половина ближних, половина дальних.",
-    "Серия 3 · в одно касание с фланга · 10. Ты катишь низом сбоку, по 5 с каждой стороны.",
-    "Серия 4 · после рывка с выбором угла · 12 · дальняя. В момент старта кричишь БЛИЖНИЙ/ДАЛЬНИЙ, засчитывается только названный угол, первым касанием."],
-  reps_text:"Дистанции: Даниил ближняя 14-15 / дальняя 20-25 м; Адриан 11-14 / 15-18 м.",
-  smotri:"Опорная нога рядом с мячом, не позади. Голова над мячом.",
-  oshibka:"Бьёт максимально сильно вместо точно. После приёма делает 4-5 касаний и теряет момент.",
-  pravilno:"Удар не позже третьего касания и в створ.",
-  match:"Серия 3 — самый частый гол центрфорварда. Серия 4 — усталость, дефицит времени, выбор угла.",
-  diff:{DANIIL:"Серия 1: 8 из 8 — переходишь дальше досрочно. Серия 2: 3 удара слабой ногой.",
-        ADRIAN:"Серия 1: половина слабой ногой. Ворота — четыре фишки, целится в свой матчевый створ."},
-  rec:"Четыре отдельных числа, по одному на серию. Общее не считается.",
+  steps:["Серия 1 · с места · 10: подсерия ближняя 5 + дальняя 5.",
+    "Серия 2 · после приёма · 10: пас в ноги, максимум 3 касания. Ближняя 5 + дальняя 5.",
+    "Серия 3 · с фланга в одно касание · 10: справа 5 + слева 5. Ты катишь низом поперёк.",
+    "Серия 4 · рывок на пас · 15: слева/центр/справа по 5. Секундомер от паса до удара, отдых 25 сек, угол называешь в момент паса.",
+    "Игрок делает всю серию (все подсерии), потом второй. Порядок подсерии выбираешь первым нажатием, дальше приложение ведёт само."],
+  reps_text:"Дистанции: Даниил ближняя 14-15 / дальняя 20-25 м; Адриан 11-14 / 15-18 м.\nФланг: удар Даниил ~10 м, Адриан ~8 м. Рывок: удар Даниил 16-18 м, Адриан 12-14 м.",
+  smotri:"Опорная нога рядом с мячом, голова над мячом. В серии 4 — два касания после рывка: подработал, пробил.",
+  oshibka:"Бьёт максимально сильно вместо точно. После приёма 4-5 касаний. В рывке тормозит перед ударом.",
+  pravilno:"Удар не позже третьего касания и в створ; в серии 4 — в названный угол.",
+  match:"Серия 3 — самый частый гол центрфорварда. Серия 4 — усталость, дефицит времени, выбор угла: ближайшее к матчу.",
+  diff:{DANIIL:"Серия 2: 3 удара слабой ногой.",
+        ADRIAN:"Половина ударов с места слабой ногой. Ворота — четыре фишки, целится в свой матчевый створ."},
+  rec:"Голы по каждой подсерии из 5; серия 4 — плюс время каждого рывка.",
 },
 E15:{ name:"Выход после дальнего паса", type:"time_goal", stopT:0.50,
   setup:"Игрок на своей половине, в 35 м от ворот (Адриану 20 м).\nСтоит боком или спиной к воротам.\nТы в 10 м от него, с мячом.",
@@ -659,8 +672,23 @@ function toast(msg){overlay(`<div class="card center"><div>${msg}</div>
 
 function smallActions(){return `<div class="small-actions">
   <button class="ghost small" onclick="showBlockScheme()">Схема</button>
+  <button class="ghost small" onclick="showBlockWhat()">Что делать</button>
   <button class="ghost small" onclick="askNote()">Заметка</button>
   <button class="warn small" onclick="screenCancel()">Отмена</button></div>`;}
+// «Что делать» текущего упражнения — оверлеем, без потери прогресса.
+function showBlockWhat(){
+  if(!S||!S.block)return; const e=EX[S.block.ex];
+  const diff=(e.diff&&(e.diff.DANIIL||e.diff.ADRIAN))?
+    `<div class="blk"><div class="h">Различия</div>${e.diff.DANIIL?`<div><b>Даниил.</b> ${e.diff.DANIIL}</div>`:""}${e.diff.ADRIAN?`<div><b>Адриан.</b> ${e.diff.ADRIAN}</div>`:""}</div>`:"";
+  overlay(`<div class="card"><div class="title">${e.name} · что делать</div>
+    <ol>${e.steps.map(s=>`<li>${s}</li>`).join("")}</ol>
+    <div class="blk look"><div class="h">Смотри</div>${e.smotri}</div>
+    <div class="blk err"><div class="h">Ошибка</div>${e.oshibka}</div>
+    ${e.pravilno?`<div class="blk ok"><div class="h">Правильно</div>${e.pravilno}</div>`:""}
+    <div class="blk match"><div class="h">Что даёт в матче</div>${e.match}</div>
+    ${diff}
+    <div class="row"><button class="go" onclick="closeOverlay()">Назад к работе</button></div></div>`);
+}
 // Шапка экрана ввода счёта: игрок · упражнение · «Выполнено <word>: N».
 function countHeader(player,exName,n,word){
   return `<div class="card"><div class="name" style="font-size:22px">${RU[player]||player} · ${exName}</div>
@@ -1102,7 +1130,7 @@ function continueSeries(){const m=S.measure,cur=m.order[m.pos];
 
 /* ---- shots: попал из N (E10S, поток Адриана в E16) ---- */
 // Число попыток и дистанции для score-упражнений с общим экраном (E10S, E07).
-function shotsCount(ex,spec){ return ex==="E07"?8:e10sShots(spec); }
+function shotsCount(ex,spec){ return ex==="E07"?10:e10sShots(spec); }
 function shotsDist(ex){ return ex==="E07"?{DANIIL:20,ADRIAN:15}:{DANIIL:15,ADRIAN:12}; }
 function workShots(st){ // оба игрока по очереди
   const ex=st.ex;
@@ -1165,36 +1193,104 @@ function ctrlG(g){const c=S.ctrl;
   delete S.ctrl; nextStep();
 }
 
-/* ---- four: удары четыре серии (E10) ---- */
-function workFour(st){ S.four={player:"DANIIL",series:1}; fourDist(); }
-function fourDist(){
-  const f=S.four, near=f.player==="DANIIL"?"14-15 м":"11-14 м", far=f.player==="DANIIL"?"20-25 м":"15-18 м";
-  const onlyNear=(f.series===1||f.series===3); // 1 с места ближняя; 3 с фланга — ближняя зона
-  const names=["с места","после приёма","в одно касание с фланга","после рывка, выбор угла"];
-  h(`<h1>Удары · ${RU[f.player]} · серия ${f.series}/4</h1>
-    <div class="reps">${names[f.series-1]}.</div>
-    <div class="title">Дистанция серии</div>
-    <div class="row"><button class="go" onclick="fourSet('near')">Ближняя ${near}</button>
-      ${onlyNear?"":`<button onclick="fourSet('far')">Дальняя ${far}</button>`}</div>
+/* ---- Удары (E10): 4 серии по подсериям, 45 ударов на игрока ---- */
+const E10_SERIES_NAME={1:"Удары с места",2:"Удары после приёма",3:"Удары с фланга",4:"Рывок на пас"};
+function e10subs(series){return E10_SUB.filter(s=>s.series===series);}
+function workFour(st){ S.four={series:1,player:"DANIIL",queue:null,pos:0}; fourEnter(); }
+// Вход в (серия, игрок): экран выбора первой подсерии.
+function fourEnter(){
+  const f=S.four, subs=e10subs(f.series);
+  h(`<h1>${E10_SERIES_NAME[f.series]} · ${RU[f.player]}</h1>
+    <div class="reps">Серия ${f.series}/4. Выбери подсерию — дальше приложение ведёт само.</div>
+    <div class="row">${subs.map(s=>`<button class="go" onclick="fourPick('${s.v}')">${s.kind} ${s.dist[f.player]} м</button>`).join("")}</div>
     ${smallActions()}`);
 }
-function fourSet(kind){
-  const f=S.four; f.kind=kind;
-  const distM=f.player==="DANIIL"?(kind==="near"?15:22):(kind==="near"?13:16);
-  const max=[8,10,10,12][f.series-1]; f.distM=distM; f.max=max;
-  h(`${countHeader(f.player,"Удары, серия "+f.series+"/4",max,"ударов")}
-    <div class="title">Сколько забил из ${max}?</div>
-    <div class="note">${kind==="near"?"ближняя":"дальняя"}</div>
-    <div class="gridN">${Array.from({length:max+1},(_,i)=>`<button onclick="fourSave(${i})">${i}</button>`).join("")}</div>
-    ${smallActions()}`);
+function fourPick(v){
+  const f=S.four, subs=e10subs(f.series).map(s=>s.v);
+  f.queue=[v,...subs.filter(x=>x!==v)]; f.pos=0; fourRunSub();
 }
-function fourSave(goals){
+function fourRunSub(){
   const f=S.four;
-  pushAttempt({player:f.player,ex:"E10",variant:"s"+f.series,attempt_no:f.series,
-    goals,shots:f.max,dist:f.distM});
-  if(f.series<4){f.series++;return fourDist();}
-  if(f.player==="DANIIL"){f.player="ADRIAN";f.series=1;return fourDist();}
-  delete S.four; nextStep();
+  if(f.pos>=f.queue.length){ // игрок закончил серию
+    if(f.player==="DANIIL"){f.player="ADRIAN";f.queue=null;f.pos=0;return fourEnter();}
+    // оба закончили серию
+    if(f.series<4){f.series++;f.player="DANIIL";f.queue=null;f.pos=0;return fourSeriesBreak();}
+    delete S.four; return nextStep();
+  }
+  const sub=E10_SUB.find(s=>s.v===f.queue[f.pos]);
+  if(sub.timed){ f.rush={sub,shot:1}; fourRushWatch(); }
+  else fourAggShot(sub);
+}
+function fourSeriesBreak(){
+  h(`<h1>Смена постановки</h1>
+    <div class="card center"><div class="title">Серия ${S.four.series}/4</div>
+      <div style="font-size:20px;margin-top:8px">${E10_SERIES_NAME[S.four.series]}. Переставь фишки.</div></div>
+    <div class="row"><button class="go" onclick="fourEnter()">Готово</button></div>`);
+}
+// Подсерия без замера (серии 1-3): экран удара → учёт голов из 5.
+function fourAggShot(sub){
+  const f=S.four, d=sub.dist[f.player];
+  h(`${countHeader(f.player,E10_SERIES_NAME[f.series],5,"ударов")}
+    <div class="title">${sub.kind} · ${d} м</div>
+    <div class="note">5 ударов подряд, затем введи, сколько забил.</div>
+    <div class="row"><button class="go" onclick="fourAggGoals('${sub.v}')">Ввести голы</button></div>
+    ${smallActions()}`);
+}
+function fourAggGoals(v){
+  const f=S.four, sub=E10_SUB.find(s=>s.v===v), d=sub.dist[f.player];
+  h(`${countHeader(f.player,E10_SERIES_NAME[f.series]+" · "+sub.kind+" "+d+" м",5,"ударов")}
+    <div class="title">Сколько забил из 5?</div>
+    <div class="gridN">${Array.from({length:6},(_,i)=>`<button onclick="fourAggSave('${v}',${i})">${i}</button>`).join("")}</div>
+    ${smallActions()}`);
+}
+function fourAggSave(v,goals){
+  const f=S.four, sub=E10_SUB.find(s=>s.v===v);
+  pushAttempt({player:f.player,ex:"E10",variant:v,attempt_no:f.pos+1,
+    goals,shots:5,dist:sub.dist[f.player]});
+  f.pos++; fourRunSub();
+}
+// Серия 4: 5 рывков, каждый с секундомером, гол и отдыхом 25 сек.
+function fourRushWatch(){
+  const f=S.four, sub=f.rush.sub, d=sub.dist[f.player];
+  h(`${countHeader(f.player,"Рывок · "+sub.kind,5,"рывков")}
+    <div class="note">Удар ${f.rush.shot} из 5 · удар с ${d} м · угол называешь в момент паса</div>
+    <div class="tap" id="tap" onclick="fourRushTap()">
+      <div class="num" id="num">0.00</div><div class="note" id="hint">тап = старт (пас)</div></div>
+    ${smallActions()}`);
+  S.watch={running:false,t0:0};
+}
+function fourRushTap(){
+  const w=S.watch;
+  if(!w.running){w.running=true;w.t0=performance.now();
+    document.getElementById("tap").classList.add("run");
+    document.getElementById("hint").textContent="тап = стоп (удар)";
+    const loop=()=>{const el=document.getElementById("num");if(!el||!w.running)return;
+      el.textContent=((performance.now()-w.t0)/1000).toFixed(2);w.raf=requestAnimationFrame(loop);};
+    w.raf=requestAnimationFrame(loop);
+  } else { w.running=false; if(w.raf)cancelAnimationFrame(w.raf);
+    S.four.rush.t=(performance.now()-w.t0)/1000; fourRushGoal(); }
+}
+function fourRushGoal(){
+  const f=S.four;
+  h(`<h1>Гол в названный угол?</h1>
+    <div class="card center"><div class="name">${RU[f.player]}</div>
+      <div class="big">${f.rush.t.toFixed(2)}</div></div>
+    <div class="row"><button class="go" onclick="fourRushSave(true)">⚽ ДА</button>
+      <button class="warn" onclick="fourRushSave(false)">✕ НЕТ</button></div>`);
+}
+function fourRushSave(g){
+  const f=S.four, sub=f.rush.sub;
+  pushAttempt({player:f.player,ex:"E10",variant:sub.v,attempt_no:f.rush.shot,
+    time_sec:f.rush.t,goals:g?1:0,shots:1,dist:sub.dist[f.player]});
+  if(f.rush.shot<5){ f.rush.shot++; return fourRest(); }
+  f.pos++; fourRunSub();
+}
+function fourRest(){
+  const target=new Date(Date.now()+25000);
+  h(`<h1>Отдых 25 сек</h1>
+    <div class="card center"><div class="sub">до</div><div class="big">${hhmmss(target)}</div></div>
+    <div class="note">Обязательный отдых между рывками.</div>
+    <div class="row"><button class="go" onclick="fourRushWatch()">Готово, на старт</button></div>`);
 }
 
 /* ================================================================
