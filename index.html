@@ -22,6 +22,10 @@ h1{font-size:23px;margin:.2em 0}
 .sub{color:var(--muted);font-size:16px}
 .hr{border:0;border-top:2px solid var(--line);margin:9px 0}
 .big{font-size:46px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
+/* Последние 10 секунд отдыха: цифры на весь экран, размер как у секундомера. */
+.cd10{font-size:96px;line-height:1.05;font-weight:800;text-align:center;
+  font-variant-numeric:tabular-nums;color:var(--accent)}
+.cd10.hot{color:var(--warn)}
 button{font-size:19px;min-height:52px;border:2px solid var(--btn);
   background:var(--btn);color:var(--btn-fg);border-radius:12px;padding:10px 14px;
   font-weight:700;cursor:pointer;flex:1}
@@ -82,7 +86,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260807-0010-12f6890';
+const BUILD = '20260807-1507-c436fb8';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -120,8 +124,15 @@ const E15_FRESH="fresh", E15_TIRED="tired";
 // дистанции, учёт одним числом из 10 (dupl. bot/catalog.py).
 const E15_SHOTS_A={v:"tired_shots",name:"Удары с места",kind:"ближняя",
   shots:10,dist:13,range:"11-14 м"};
-// Секундомер «Отрыва»: пуск — касание мяча игроком, стоп — удар.
-const E15_WATCH_RULE="Пуск — когда он коснулся мяча. Стоп — удар.";
+// Секундомер «Отрыва»: пуск — СТАРТ ИГРОКА, стоп — удар (dupl. bot/catalog.py).
+// В замер входит весь рывок: реакция на пас, догон мяча, приём, ведение, удар.
+// Замеры ДО 2026-08-07 мерили другой отрезок (от касания мяча) и с новыми
+// НЕСРАВНИМЫ: тот отрезок был непостоянным и давал 2.94 с на 36 м.
+const E15_WATCH_RULE="Пуск — когда он стартовал. Стоп — удар.";
+// Замеры по эту дату включительно — старого формата (dupl. bot/catalog.py).
+const E15_TIMING_CHANGED="2026-08-07";
+const E15_OLD_TIMING="старый формат замера";
+function oldBreakawayTiming(){ return (S&&S.spec?S.spec.iso:"")<=E15_TIMING_CHANGED; }
 // Подсерии «Ударов» (E10): 9 × 5 = 45 ударов на игрока (dupl. bot/catalog.py).
 const E10_SUB=[
   {v:"s1_near",series:1,kind:"ближняя",timed:false,dist:{DANIIL:15,ADRIAN:13}},
@@ -138,17 +149,48 @@ const E10_SUB=[
 /* ---------- Звук и вибрация ---------- */
 function soundOn(){ return localStorage.getItem("trening_sound")!=="off"; }
 function toggleSound(){ localStorage.setItem("trening_sound", soundOn()?"off":"on"); screenHome(); }
-function beep(){
+function tone(ms,freq){
   if(!soundOn()) return;
   try{
     const A=window.AudioContext||window.webkitAudioContext; const a=new A();
     const o=a.createOscillator(), g=a.createGain();
     o.connect(g); g.connect(a.destination);
-    o.type="sine"; o.frequency.value=880; g.gain.value=0.25;
-    o.start(); setTimeout(()=>{o.stop(); a.close();},180);
+    o.type="sine"; o.frequency.value=freq; g.gain.value=0.25;
+    o.start(); setTimeout(()=>{o.stop(); a.close();},ms);
   }catch(e){}
 }
-function signal(){ beep(); if(navigator.vibrate) navigator.vibrate(200); }
+function beep(){ tone(180,880); }        // короткий: 3, 2, 1
+function beepLong(){ tone(700,660); }    // длинный: ноль, можно давать старт
+// Вибрация НЕ зависит от звука: при выключенном звуке остаётся она.
+function buzz(ms){ if(navigator.vibrate){ try{navigator.vibrate(ms||200);}catch(e){} } }
+function signal(){ beep(); buzz(200); }
+
+/* ---------- Отсчёт последних 10 секунд отдыха ----------
+   Один механизм на все экраны отдыха: между повторами, между упражнениями,
+   в паузах. Пока секунд больше десяти — обычная строка «N сек»; последние
+   десять — цифры на весь экран, бип на 3, 2, 1 и длинный на нуле, вибрация
+   на каждой из последних трёх. Тренер не считает в уме. */
+let cdTimer=null;
+function stopCountdown(){ if(cdTimer){clearInterval(cdTimer);cdTimer=null;} }
+function countdownTo(targetMs,elId,onDone){
+  stopCountdown();
+  let last=null, fired=false;
+  const tick=()=>{
+    const el=document.getElementById(elId);
+    if(!el){ stopCountdown(); return; }
+    const remain=targetMs-Date.now();
+    const secs=Math.max(0,Math.ceil(remain/1000));
+    if(secs<=10){ el.className="cd10"+(secs<=3?" hot":""); el.textContent=secs; }
+    else { el.className="big"; el.textContent=secs+" сек"; }
+    if(secs!==last){
+      if(secs===3||secs===2||secs===1){ beep(); buzz(200); }
+      else if(secs===0){ beepLong(); }
+      last=secs;
+    }
+    if(remain<=0&&!fired){ fired=true; stopCountdown(); if(onDone)onDone(); }
+  };
+  tick(); cdTimer=setInterval(tick,200);
+}
 
 /* ---------- Часы и абсолютное время ---------- */
 function hhmm(dt){ return String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0"); }
@@ -170,12 +212,13 @@ function sessionMinutes(phase,blocks){
   return WARMUP_MIN[phase]+blocks.reduce((a,b)=>a+b[1],0)+blocks.length*PAUSE_MIN+COOLDOWN_MIN[phase];
 }
 // Матрица Фазы 1: [цель, [[код, минут-блока]...]] (минуты дня — из sessionMinutes)
+// Минуты E13 учитывают отдых 1 мин между приёмами (см. bot/schedule.py).
 const P1_MATRIX={
-  MON:["Скорость и первый шаг",[["E01",14],["E02",15],["E13",13],["E12",9],["E10S",9]]],
+  MON:["Скорость и первый шаг",[["E01",14],["E02",15],["E13",16],["E12",9],["E10S",9]]],
   TUE:["Дриблинг и быстрые ноги",[["E04",15],["E05",15],["E14",14],["E10S",12]]],
-  WED:["Смена направления",[["E06",12],["E13",18],["E14",14],["E12",12]]],
-  THU:["Контроль и завершение",[["E07",19],["E10",45],["E13",8]]],
-  FRI:["Отрыв",[["E15",38],["E13",16]]],
+  WED:["Смена направления",[["E06",12],["E13",22],["E14",14],["E12",12]]],
+  THU:["Контроль и завершение",[["E07",19],["E10",45],["E13",10]]],
+  FRI:["Отрыв",[["E15",38],["E13",18]]],
 };
 // Фаза 2 — два блока, короткое занятие (35 мин).
 const P2_TYPES={
@@ -265,7 +308,7 @@ const MARKUP_SNIPPET = {
   E12: "Игрок с мячом в 20 м от ворот.\nТы в двух метрах позади и сбоку.",
   E13: "Игрок спиной к воротам, в 16-18 м от них.\nПасующий в 12 м перед ним, лицом к воротам.\nТы за спиной принимающего.",
   E14: "Игрок с мячом в 20 м от ворот.\nТы между ним и воротами, в 5 м от него.",
-  E15: "Даниил: от центра поля, ведение ~36 м, команда на 25-м метре.\nАдриан: от линии центрального круга, ~27 м, команда на 18-м.\nТы на своей половине ЗА СПИНОЙ игрока, с мячом. Ворота.\nСекундомер: пуск — касание мяча игроком, стоп — удар.\nЧасть 2 Адриана: 10 ударов с места с 11-14 м.",
+  E15: "Даниил: от центра поля, ведение ~36 м, команда на 25-м метре.\nАдриан: от линии центрального круга, ~27 м, команда на 18-м.\nТы на своей половине ЗА СПИНОЙ игрока, с мячом. Ворота.\nСекундомер: пуск — старт игрока, стоп — удар (весь рывок).\nЧасть 2 Адриана: 10 ударов с места с 11-14 м.",
   E08: "Даниил: от центра поля 34 м. Адриан: 27 м. Ты у ворот.",
 };
 // SVG-схема дня — коридоры для ПН и ПТ Фазы 1 (если есть).
@@ -557,7 +600,7 @@ E15:{ name:"Отрыв", type:"breakaway", stopT:0.50,
     lbl(70,150,"Даниил ~36 м (команда 25) · Адриан ~27 м (команда 18)")),
   steps:["Ты за спиной игрока с мячом, даёшь пас на ход вперёд.",
     "Игрок стартует, забирает мяч на скорости не останавливаясь, ведёт, бьёт.",
-    "СЕКУНДОМЕР: пуск — когда он коснулся мяча, стоп — удар. Пас не замеряется.",
+    "СЕКУНДОМЕР: пуск — когда он СТАРТОВАЛ, стоп — удар. В замер входит всё: реакция, догон мяча, приём, ведение. Ждём Даниил 6-7 с, Адриан 5-6 с.",
     "Примерно на середине дистанции ты кричишь УДАР или ПАС.",
     "ЧАСТЬ 1 · свежие: 5 повторов обоим, отдых 2 минуты между повторами.",
     "ЧАСТЬ 2 · сразу после первой, на подсаженных ногах: только Даниил, 3 повтора, отдых ровно 90 секунд. Каждый заканчивается ударом: время и гол. Дельта считается по этим трём.",
@@ -883,20 +926,24 @@ function showDrink(){signal();overlay(`<div class="card center">
 
 /* ---- Таймер (абсолютное время) ---- */
 function screenTimer(st){
-  const target=new Date(Date.now()+st.mins*60000);
+  const target=Date.now()+st.mins*60000;
   h(`<h1>${st.title}</h1>
-    <div class="card center"><div class="sub">до</div><div class="big">${hhmm(target)}</div>
+    <div class="card center"><div class="sub">до</div><div class="big">${hhmm(new Date(target))}</div>
+      <div class="big" id="rc"></div>
       <div class="note" id="clk"></div></div>
     <div class="reps" style="white-space:pre-line">${st.body||""}</div>
-    <div class="row"><button class="go" onclick="nextStep()">Готово</button></div>`);
+    <div class="row"><button class="go" onclick="stopCountdown();nextStep()">Готово</button></div>`);
   const el=document.getElementById("clk"); if(el)el.textContent="сейчас "+hhmm(new Date());
+  countdownTo(target,"rc");
 }
 function screenPause(){
-  const target=new Date(Date.now()+60000);
+  const target=Date.now()+60000;
   h(`<h1>Пауза 1 мин</h1>
-    <div class="card center"><div class="big">${hhmm(target)}</div>
+    <div class="card center"><div class="big">${hhmm(new Date(target))}</div>
+      <div class="big" id="rc"></div>
       <div style="font-size:22px;margin-top:8px">Переставь фишки, попейте воды.</div></div>
-    <div class="row"><button class="go" onclick="nextStep()">Пропустить</button></div>`);
+    <div class="row"><button class="go" onclick="stopCountdown();nextStep()">Пропустить</button></div>`);
+  countdownTo(target,"rc");
 }
 
 /* ---- ЭКРАН 1 · РАССТАНОВКА ---- */
@@ -1036,7 +1083,9 @@ function screenBreakawayDelta(){
     .sort((a,b)=>a.attempt_no-b.attempt_no).map(a=>a.time_sec);
   const d=times.length>=2?Math.round((times[times.length-1]-times[0])*100)/100:null;
   let verdict="";
-  if(d!==null) verdict = d<0.3?"Способен повторить отрыв."
+  if(d!==null) verdict = oldBreakawayTiming()
+    ? "Старый формат замера: дельта не оценивается."
+    : d<0.3?"Способен повторить отрыв."
     : d<=0.6?"На границе." : "Не способен, ноги не восстанавливаются между всплесками.";
   h(`<h1>Отрыв · часть 2</h1>
     <div class="card center"><div class="name">ДАНИИЛ</div>
@@ -1061,14 +1110,17 @@ function e15ShotsSave(g){
   nextStep();
 }
 function screenFullRest(cur){
-  const e=EX[cur.ex], target=new Date(Date.now()+90000);
+  const e=EX[cur.ex], target=Date.now()+90000;
   h(`<h1>Полный отдых 90 сек</h1>
     <div class="card center"><div class="sub">${RU[cur.player]} · до</div>
-      <div class="big">${hhmmss(target)}</div></div>
+      <div class="big">${hhmmss(new Date(target))}</div>
+      <div class="big" id="rc"></div></div>
     ${e.firstRestText?`<div class="reps" style="white-space:pre-line">${e.firstRestText}</div>`:""}
     <div class="row"><button class="go" onclick="finishFullRest()">Готово, на старт</button></div>`);
+  countdownTo(target,"rc");
 }
-function finishFullRest(){ const m=S.measure; m.firstDone[m.order[m.pos].player]=true; measureAdvance(); }
+function finishFullRest(){ stopCountdown();
+  const m=S.measure; m.firstDone[m.order[m.pos].player]=true; measureAdvance(); }
 
 function screenRestWait(cur){
   const m=S.measure, other=cur.player==="DANIIL"?"ADRIAN":"DANIIL";
@@ -1082,18 +1134,20 @@ function screenRestWait(cur){
       `<div class="note center">${RU[other]} готов в ${hhmmss(new Date(m.readyAt[other]))}</div>`:""}
     <div class="row"><button class="ghost" onclick="skipRest()">Пропустить отдых</button></div>
     ${smallActions()}`);
+  // За 10 секунд уходим на секундомер — отсчёт продолжается уже там,
+  // чтобы можно было дать старт в любой момент последних секунд.
+  countdownTo(m.readyAt[cur.player],"rc");
   if(S._restTimer)clearInterval(S._restTimer);
   const tick=()=>{
-    const remain=m.readyAt[cur.player]-Date.now();
-    const el=document.getElementById("rc");
-    if(!el){clearInterval(S._restTimer);return;}
-    el.textContent=Math.max(0,Math.ceil(remain/1000))+" сек";
-    if(remain<=10000){clearInterval(S._restTimer);S._restTimer=null;
-      signal(); screenStopwatch(cur,true);}
+    if(!document.getElementById("rc")){clearInterval(S._restTimer);return;}
+    if(m.readyAt[cur.player]-Date.now()<=10000){
+      clearInterval(S._restTimer);S._restTimer=null;
+      screenStopwatch(cur,true);}
   };
   tick(); S._restTimer=setInterval(tick,250);
 }
 function skipRest(){ if(S._restTimer){clearInterval(S._restTimer);S._restTimer=null;}
+  stopCountdown();
   const m=S.measure; m.readyAt[m.order[m.pos].player]=Date.now(); measureAdvance(); }
 
 function screenStopwatch(cur,ready10){
@@ -1107,7 +1161,7 @@ function screenStopwatch(cur,ready10){
     nextInfo="Далее: "+RU[m.order[k].player]; break; } }
   const prev=prevToday(cur.player,cur.ex,cur.variant), rec=recordFor(cur.player,cur.ex,cur.variant);
   const recLine=(prev!==null||rec!==null)?`Пред. ${prev!==null?prev.toFixed(2):"—"} · рекорд ${rec!==null?rec.toFixed(2):"—"}`:"";
-  h(`${ready10?`<div class="warnbox center">ГОТОВНОСТЬ 10 СЕК</div>`:""}
+  h(`${ready10?`<div class="warnbox center">ГОТОВНОСТЬ<div id="rc10"></div></div>`:""}
     <div class="title">${e.name}</div><div class="hr"></div>
     ${e.watchNote?`<div class="note center">${e.watchNote}</div>`:""}
     <div class="tap" id="tap" onclick="tapWatch()">
@@ -1123,6 +1177,8 @@ function screenStopwatch(cur,ready10){
       <button class="ghost small" onclick="measureBack()">Назад</button></div>
     <div class="row"><button class="ghost small" onclick="manualEntry()">Ручной ввод</button></div>
     ${smallActions()}`);
+  // Последние секунды отдыха отсчитываются вслух и цифрами на весь экран.
+  if(ready10) countdownTo(m.readyAt[cur.player],"rc10");
   S.watch={running:false,t0:0,cur};
 }
 function variantLabel(cur){
@@ -1249,11 +1305,54 @@ function shotsSave(g){const s=S.shots;
   delete S.shots; nextStep();
 }
 /* ---- control: контроль 1-5 + голы из N (E13) ---- */
+/* Приём под опекой: сначала сами приёмы с отдыхом, потом ввод результата.
+   Отдых между СВОИМИ приёмами — минута. Братья чередуются, поэтому часть
+   минуты набегает сама, пока принимает второй: ждём только остаток до
+   готовности, лишнего экрана на полную минуту не появляется. */
+const E13_REST_SEC=60;
 function workControl(st){
   const N=receptionsFor(S.spec);
-  S.ctrl={ex:st.ex,player:"DANIIL",N,stage:"c"};
-  ctrlRender();
+  const order=[];
+  for(let i=1;i<=N;i++) for(const pl of PLAYERS) order.push({player:pl,no:i});
+  S.ctrl={ex:st.ex,player:"DANIIL",N,stage:"reps",pos:0,order,
+          readyAt:{DANIIL:0,ADRIAN:0}};
+  ctrlAdvance();
 }
+function ctrlAdvance(){
+  const c=S.ctrl;
+  if(c.pos>=c.order.length){        // приёмы кончились — вводим результат
+    c.stage="c"; c.player="DANIIL"; saveSession(); return ctrlRender();
+  }
+  const cur=c.order[c.pos];
+  return (c.readyAt[cur.player]-Date.now()>0)?ctrlRest(cur):ctrlRep(cur);
+}
+function ctrlRep(cur){
+  const c=S.ctrl;
+  h(`${countHeader(cur.player,"Приём под опекой",c.N,"приёмов")}
+    <div class="title">Приём ${cur.no} из ${c.N}</div>
+    <div class="note">Вариант объявляешь вслух до паса. Между своими приёмами
+    ${E13_REST_SEC} секунд отдыха — приложение следит.</div>
+    <div class="row"><button class="go" onclick="ctrlRepDone()">Принял</button></div>
+    ${smallActions()}`);
+}
+function ctrlRepDone(){
+  const c=S.ctrl, cur=c.order[c.pos];
+  c.readyAt[cur.player]=Date.now()+E13_REST_SEC*1000;
+  c.pos++; saveSession(); ctrlAdvance();
+}
+function ctrlRest(cur){
+  const c=S.ctrl, target=c.readyAt[cur.player];
+  h(`<h1>Отдых</h1>
+    <div class="card center"><div class="sub">следующий</div>
+      <div class="name">${RU[cur.player]}</div>
+      <div class="note">приём ${cur.no} из ${c.N} · готов в ${hhmmss(new Date(target))}</div>
+      <div class="big" id="rc"></div></div>
+    <div class="row"><button class="ghost" onclick="ctrlSkipRest()">Пропустить отдых</button></div>
+    ${smallActions()}`);
+  countdownTo(target,"rc",()=>ctrlAdvance());
+}
+function ctrlSkipRest(){ stopCountdown();
+  const c=S.ctrl; c.readyAt[c.order[c.pos].player]=Date.now(); ctrlAdvance(); }
 function ctrlRender(){
   const c=S.ctrl;
   const head=countHeader(c.player,"Приём под опекой",c.N,"приёмов");
@@ -1477,7 +1576,9 @@ function breakawayChunks(list){
       .filter(a=>a.time_sec!==null&&!a.lost).map(a=>a.time_sec);
     if(tt.length)lines.push("На усталости: "+tt.map(x=>x.toFixed(2)).join(" → "));
     if(tt.length>=2){ const d=Math.round((tt[tt.length-1]-tt[0])*100)/100;
-      const v=d<0.3?"способен повторить отрыв":d<=0.6?"на границе"
+      // По старому отрезку дельту не трактуем — ставим пометку.
+      const v=oldBreakawayTiming()?E15_OLD_TIMING
+        :d<0.3?"способен повторить отрыв":d<=0.6?"на границе"
         :"не способен, ноги не восстанавливаются между всплесками";
       lines.push(`  дельта 1-3: ${d.toFixed(2)} — ${v}`); }
     const t=goalsOf(tired); if(t.s)lines.push(`  голы ${pctTxt(t.g,t.s)}`);
