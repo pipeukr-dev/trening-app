@@ -86,7 +86,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260807-1507-c436fb8';
+const BUILD = '20260810-1607-237dac9';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -116,7 +116,7 @@ const LOST_EXERCISES = new Set(["E04","E05","E15","E10S"]);
 // E15 — часть 1 (5 обоим) плюс часть 2 (Даниил 3).
 const REPS={E01:{DANIIL:6,ADRIAN:5},E02:{DANIIL:6,ADRIAN:5},E04:{DANIIL:6,ADRIAN:6},
   E05:{DANIIL:6,ADRIAN:6},E06:{DANIIL:5,ADRIAN:5},E07:{DANIIL:10,ADRIAN:10},
-  E10S:{DANIIL:10,ADRIAN:10},E15:{DANIIL:8,ADRIAN:5},
+  E10S:{DANIIL:5,ADRIAN:5},E15:{DANIIL:8,ADRIAN:5},
   E08_D:{DANIIL:5},E08_A:{ADRIAN:5}};
 // «Отрыв» (E15): два режима подряд. Часть 2 — без стоп-правила.
 const E15_FRESH="fresh", E15_TIRED="tired";
@@ -214,17 +214,18 @@ function sessionMinutes(phase,blocks){
 // Матрица Фазы 1: [цель, [[код, минут-блока]...]] (минуты дня — из sessionMinutes)
 // Минуты E13 учитывают отдых 1 мин между приёмами (см. bot/schedule.py).
 const P1_MATRIX={
-  MON:["Скорость и первый шаг",[["E01",14],["E02",15],["E13",16],["E12",9],["E10S",9]]],
-  TUE:["Дриблинг и быстрые ноги",[["E04",15],["E05",15],["E14",14],["E10S",12]]],
-  WED:["Смена направления",[["E06",12],["E13",22],["E14",14],["E12",12]]],
+  MON:["Скорость и первый шаг",[["E01",14],["E02",15],["E13",16],["E12",13],["E10S",4]]],
+  TUE:["Дриблинг и быстрые ноги",[["E04",15],["E05",15],["E14",14],["E10S",7]]],
+  WED:["Смена направления",[["E06",12],["E13",22],["E14",14],["E12",16]]],
   THU:["Контроль и завершение",[["E07",19],["E10",45],["E13",10]]],
   FRI:["Отрыв",[["E15",38],["E13",18]]],
 };
-// Фаза 2 — два блока, короткое занятие (35 мин).
+// Фаза 2 — два блока, короткое занятие (dupl. bot/schedule.py):
+// Скорость 35, Мяч 34, Единоборство 34 минуты.
 const P2_TYPES={
   S:["Скорость",[["E01",10],["E02",7]]],
-  B:["Мяч",[["E04",10],["E10S",7]]],
-  D:["Единоборство",[["E13",10],["E12",7]]],
+  B:["Мяч",[["E04",10],["E10S",6]]],
+  D:["Единоборство",[["E13",9],["E12",7]]],
 };
 function isoToDate(s){const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);}
 function dateToIso(dt){return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");}
@@ -285,9 +286,13 @@ function determineDay(iso){
 // Число приёмов E13 по дню (контроль под опекой).
 function e13N(code){return {MON:6,WED:8,THU:4,FRI:5}[code]||5;}
 // Фаза-зависимые счётчики: в Фазе 2 объём срезан.
-function receptionsFor(spec){return spec.phase===2?5:e13N(spec.code);}
-function e10sReps(spec){return spec.phase===2?6:REPS.E10S.DANIIL;}
-function duelShotsFor(ex,spec){return (ex==="E12"&&spec.phase===2)?4:EX[ex].shots;}
+// Фаза 2 — вдвое меньший объём при том же отдыхе (dupl. bot/catalog.py).
+const P2_RECEPTIONS=4, P2_DUEL_SHOTS=3;
+function receptionsFor(spec){return spec.phase===2?P2_RECEPTIONS:e13N(spec.code);}
+// «Ведение и удар» — 5 повторов в обеих фазах: на 36 и 27 м больше утомляет,
+// чем даёт (dupl. bot/catalog.py REP_COUNTS).
+function e10sReps(spec){return REPS.E10S.DANIIL;}
+function duelShotsFor(ex,spec){return (ex==="E12"&&spec.phase===2)?P2_DUEL_SHOTS:EX[ex].shots;}
 // Раз в две недели удлинённый третий длинный забег Даниила (E02).
 function e02Biweekly(iso){const diff=Math.round((isoToDate(iso)-isoToDate("2026-08-10"))/86400000);
   return diff>=0 && diff%14===0;}
@@ -304,7 +309,7 @@ const MARKUP_SNIPPET = {
   E06: "3 фишки в линию: Даниилу через 5 м, Адриану через 4 м.\nИгрок стартует от средней, лицом к тебе.",
   E07: "Принимающий спиной к воротам: Даниил в 20 м, Адриан в 15 м. Ворота.\nТы за его спиной, в 1-2 м (меняешь сторону).\nВторой брат пасует в ноги, в 10 м перед ним (Адриану 8 м). Потом меняются.",
   E10: "4 серии по 5+5 (рывок 5×3), 45 ударов.\nС места/после приёма: Даниил ближняя 14-15 / дальняя 20-25 м, Адриан 11-14 / 15-18 м.\nФланг: старт от штрафной, удар Даниил ~10 м, Адриан ~8 м.\nРывок: старт 28/22 м, удар с 16-18 / 12-14 м, отдых 25 сек, замер времени.\nАдриану 4 фишки в воротах (сужают створ + углы). Ворота.",
-  E10S: "Даниил: старт от центра поля, ведение до линии штрафной (~36 м).\nАдриан: старт от линии центрального круга (~27 м).\nТочки старта и удара приблизительные, ±2 м. Ворота.",
+  E10S: "5 повторов каждому.\nДаниил: старт от центра поля, ведение до линии штрафной (~36 м).\nАдриан: старт от линии центрального круга (~27 м).\nТочки старта и удара приблизительные, ±2 м. Ворота.",
   E12: "Игрок с мячом в 20 м от ворот.\nТы в двух метрах позади и сбоку.",
   E13: "Игрок спиной к воротам, в 16-18 м от них.\nПасующий в 12 м перед ним, лицом к воротам.\nТы за спиной принимающего.",
   E14: "Игрок с мячом в 20 м от ворот.\nТы между ним и воротами, в 5 м от него.",
@@ -438,14 +443,14 @@ E13:{ name:"Приём под опекой", type:"control",
     "B · Первым касанием мимо тебя вперёд, обегает, догоняет, бьёт.",
     "C · Сброс партнёру, отрыв под углом, пас на ход, удар.",
     "Варианты чередуешь. В среду все три (A,B,C), в другие дни A и C."],
-  reps_text:"Число приёмов на игрока зависит от дня (задаётся на экране ввода).",
+  reps_text:"Число приёмов на игрока зависит от дня. После каждого приёма — ГОЛ, УДЕРЖАЛ или ПОТЕРЯЛ; контроль мяча приложение считает само. Между своими приёмами минута отдыха.",
   smotri:"Посмотрел ли через плечо ДО паса. Плечо на тебе до прихода мяча. Первое касание в свободную сторону.",
   oshibka:"Ждёт мяч стоя, потом борется. Принимает под себя и закрыт. Отрывается прямо, а не под углом.",
   pravilno:"К моменту касания мяча позиция корпуса уже занята.",
   match:"Оба — центральные нападающие. Мяч в спину под опекой — их самый частый эпизод.",
   diff:{DANIIL:"Плечо ставится не в тебя, а ПОД тебя, вес на дальнюю ногу. Выиграть позицию раньше на полшага, не перетолкать.",
         ADRIAN:"Держишь контакт до удара — учится бить, не сбрасывая соперника."},
-  rec:"Контроль мяча 1-5 (твоя оценка) и сколько голов из общего числа приёмов.",
+  rec:"По каждому приёму: гол / удержал / потерял. Контроль 1-5 считается сам из доли удержанных.",
 },
 E12:{ name:"Ты догоняешь и оттесняешь", type:"duel_goals", shots:5,
   setup:"Игрок с мячом в 20 м от ворот.\nТы в двух метрах позади него и чуть сбоку.",
@@ -453,8 +458,9 @@ E12:{ name:"Ты догоняешь и оттесняешь", type:"duel_goals",
     lbl(60,130,"ведение 20 м")+mark(30,80,"ТЫ")+arrow(45,85,90,100)+lbl(15,72,"сзади-сбоку")),
   steps:["Он ведёт мяч к воротам, ты догоняешь сзади-сбоку и лезешь плечом.",
     "Он должен пробить, не дав тебе занять позицию.",
+    "Строго по очереди: один выполняет — второй отдыхает 90 секунд от своего финиша.",
     "5 подходов каждому. В конце вводишь, сколько забил из 5."],
-  reps_text:"5 подходов каждому. Записывается голов из 5.",
+  reps_text:"5 подходов каждому, строгое чередование, отдых 90 сек от своего финиша.\nВ конце записывается голов из 5.",
   why:"Смысл — не сбросить тебя силой, а не дать контакту случиться: мяч на дальнюю ногу, сменить угол, уйти раньше.",
   smotri:"Мяч всё время на дальней от тебя ноге. Удар без остановки.",
   oshibka:"Пытается перетолкать корпусом и встаёт. Ведёт мяч на ближней к тебе ноге.",
@@ -676,7 +682,7 @@ function repsFor(code,spec){
     push("DANIIL",[1,2,3,4,5,6].map(n=>slot("DANIIL","E05","",5,n,70,{goal:true})));
     push("ADRIAN",[1,2,3,4,5,6].map(n=>slot("ADRIAN","E05","",4,n,60,{goal:true})));
   } else if(code==="E10S"){
-    const nn=e10sReps(spec);  // Фаза 2 — 6 повторов
+    const nn=e10sReps(spec);  // 5 повторов, в обеих фазах
     push("DANIIL",Array.from({length:nn},(_,i)=>slot("DANIIL","E10S","",36,i+1,60,{goal:true})));
     push("ADRIAN",Array.from({length:nn},(_,i)=>slot("ADRIAN","E10S","",27,i+1,60,{goal:true})));
   } else if(code==="E15"){
@@ -713,17 +719,33 @@ let S=null, sessionTimer=null, lastDrink=0;
 function saveSession(){ if(S) localStorage.setItem("trening_session",JSON.stringify(S)); }
 function clearSession(){ localStorage.removeItem("trening_session"); S=null;
   if(sessionTimer){clearInterval(sessionTimer);sessionTimer=null;} }
-function pushAttempt(o){
-  const a=loadAttempts();
-  const rec={uuid:uuid(),timestamp:nowIso(),date:S.spec.iso,player:o.player,
-    day_code:S.spec.day_code,exercise_id:o.ex||o.exercise_id,variant:o.variant||"",
+// Поля записи из «слотовых» полей — один маппер на запись и перезапись.
+function attemptFields(o){
+  return {player:o.player,day_code:S.spec.day_code,
+    exercise_id:o.ex||o.exercise_id,variant:o.variant||"",
     attempt_no:o.attempt_no||0,is_warmup:false, // пробных больше нет
     time_sec:(o.time_sec!==undefined&&o.time_sec!==null)?Number(Number(o.time_sec).toFixed(2)):null,
     distance_m:o.dist||o.distance_m||null,control:o.control??null,goals:o.goals??null,
     shots:o.shots??null,wellbeing:o.wellbeing??null,
-    shortened:(S.spec.shortened||S.shortened||false),note:o.note||"",
-    lost:!!o.lost,uploaded:false};
+    shortened:(S.spec.shortened||S.shortened||false),note:o.note||"",lost:!!o.lost};
+}
+function pushAttempt(o){
+  const a=loadAttempts();
+  const rec=Object.assign({uuid:uuid(),timestamp:nowIso(),date:S.spec.iso},
+                          attemptFields(o),{uploaded:false});
   a.push(rec); saveAttempts(a); S.attempts.push(rec); saveSession(); return rec;
+}
+// Перезапись существующей попытки (кнопка «Назад»): uuid, дата и номер
+// остаются прежними, меняется только результат — новая запись не создаётся
+// и нумерация не сдвигается.
+function rewriteAttempt(id,o){
+  const fields=attemptFields(o);
+  const all=loadAttempts(), i=all.findIndex(x=>x.uuid===id);
+  if(i>=0){ Object.assign(all[i],fields); saveAttempts(all); }
+  const j=S.attempts.findIndex(x=>x.uuid===id);
+  if(j>=0) Object.assign(S.attempts[j],fields);
+  saveSession();
+  return j>=0?S.attempts[j]:null;
 }
 function writeWellbeing(){ for(const pl of PLAYERS){ if(S.wellbeing[pl]!==undefined)
   pushAttempt({player:pl,ex:"E00",wellbeing:S.wellbeing[pl],note:"самочувствие",time_sec:null}); } }
@@ -749,7 +771,31 @@ function smallActions(){return `<div class="small-actions">
   <button class="ghost small" onclick="showBlockScheme()">Схема</button>
   <button class="ghost small" onclick="showBlockWhat()">Что делать</button>
   <button class="ghost small" onclick="askNote()">Заметка</button>
-  <button class="warn small" onclick="screenCancel()">Отмена</button></div>`;}
+  <button class="ghost small" onclick="confirmFinishExercise()">Завершить упражнение</button>
+  <button class="warn small" onclick="screenCancel()">Отмена занятия</button></div>`;}
+/* Завершить УПРАЖНЕНИЕ — не занятие. Записанное остаётся, занятие идёт
+   дальше со следующего блока; заминка и итог никуда не деваются. Раньше
+   единственной кнопкой была «Отмена», и остановка упражнения обрывала
+   занятие целиком. */
+function confirmFinishExercise(){
+  const name=(S&&S.block&&EX[S.block.ex])?EX[S.block.ex].name:"упражнение";
+  overlay(`<div class="card"><div class="title">Завершить «${name}»?</div>
+    <div class="note">Записанное сохранится. Занятие продолжится со следующего
+    блока — это НЕ отмена занятия.</div>
+    <div class="row"><button class="go" onclick="finishExercise()">Завершить упражнение</button>
+      <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
+}
+function finishExercise(){
+  closeOverlay(); stopCountdown();
+  if(S._restTimer){clearInterval(S._restTimer);S._restTimer=null;}
+  if(S.watch&&S.watch.running){S.watch.running=false;
+    if(S.watch.raf)cancelAnimationFrame(S.watch.raf);}
+  // «Ты догоняешь»: подходы прерваны, но результат ещё не введён — спросим.
+  if(S.duelrun){ const ex=S.duelrun.ex; delete S.duelrun; saveSession();
+    return startDuelGoals(ex); }
+  ["measure","ctrl","four","duelg","shots","e15s"].forEach(k=>{delete S[k];});
+  saveSession(); nextStep();
+}
 // «Что делать» текущего упражнения — оверлеем, без потери прогресса.
 function showBlockWhat(){
   if(!S||!S.block)return; const e=EX[S.block.ex];
@@ -1008,14 +1054,58 @@ function workDuel(st){
     ${smallActions()}`);
 }
 // Единоборство с учётом голов: после подходов — ввод по каждому игроку.
+// «Ты догоняешь» (E12) ведётся по подходам: строгое чередование, отдых 90 с
+// от своего финиша — рывок с сопротивлением на 20 м требует восстановления.
 function workDuelGoals(st){
   const e=EX[st.ex];
+  if(st.ex==="E12") return duelRunStart(st);
   h(`<h1>${e.name}</h1>
     <div class="card"><div class="badge">${duelShotsFor(st.ex,S.spec)} подходов каждому</div>
       <div class="note" style="margin-top:8px">${e.reps_text}</div></div>
     <div class="row"><button class="go" onclick="startDuelGoals('${st.ex}')">Ввести результат</button></div>
     ${smallActions()}`);
 }
+function duelRunStart(st){
+  const N=duelShotsFor(st.ex,S.spec), order=[];
+  for(let i=1;i<=N;i++) for(const pl of PLAYERS) order.push({player:pl,no:i});
+  S.duelrun={ex:st.ex,N,pos:0,order,readyAt:{DANIIL:0,ADRIAN:0}};
+  duelRunAdvance();
+}
+function duelRunAdvance(){
+  const d=S.duelrun;
+  if(d.pos>=d.order.length){        // подходы кончились — вводим голы
+    const ex=d.ex; delete S.duelrun; saveSession(); return startDuelGoals(ex);
+  }
+  const cur=d.order[d.pos];
+  return (d.readyAt[cur.player]-Date.now()>0)?duelRunRest(cur):duelRunRep(cur);
+}
+function duelRunRep(cur){
+  const d=S.duelrun;
+  h(`${countHeader(cur.player,EX[d.ex].name,d.N,"подходов")}
+    <div class="title">${RU[cur.player]} · подход ${cur.no} из ${d.N}</div>
+    <div class="note">Второй в это время отдыхает. Отдых ${E12_REST_SEC} секунд
+    от своего финиша — приложение следит.</div>
+    <div class="row"><button class="go" onclick="duelRunDone()">Выполнил</button></div>
+    ${smallActions()}`);
+}
+function duelRunDone(){
+  const d=S.duelrun, cur=d.order[d.pos];
+  d.readyAt[cur.player]=Date.now()+E12_REST_SEC*1000;
+  d.pos++; saveSession(); duelRunAdvance();
+}
+function duelRunRest(cur){
+  const d=S.duelrun, target=d.readyAt[cur.player];
+  h(`<h1>Отдых</h1>
+    <div class="card center"><div class="sub">следующий</div>
+      <div class="name">${RU[cur.player]}</div>
+      <div class="note">подход ${cur.no} из ${d.N} · готов в ${hhmmss(new Date(target))}</div>
+      <div class="big" id="rc"></div></div>
+    <div class="row"><button class="ghost" onclick="duelRunSkipRest()">Пропустить отдых</button></div>
+    ${smallActions()}`);
+  countdownTo(target,"rc",()=>duelRunAdvance());
+}
+function duelRunSkipRest(){ stopCountdown();
+  const d=S.duelrun; d.readyAt[d.order[d.pos].player]=Date.now(); duelRunAdvance(); }
 function startDuelGoals(ex){
   S.duelg={ex,shots:duelShotsFor(ex,S.spec),player:"DANIIL"}; duelgRender();
 }
@@ -1039,14 +1129,19 @@ function startMeasure(st,part){
   const order=[]; const mx=Math.max(plan.DANIIL.length,plan.ADRIAN.length);
   for(let i=0;i<mx;i++){ if(plan.DANIIL[i])order.push(plan.DANIIL[i]);
     if(plan.ADRIAN[i])order.push(plan.ADRIAN[i]); }
+  // best и stopped — ПО СЕРИЯМ, а серия это игрок+вариант: старт сидя
+  // всегда медленнее старта стоя, 20 м медленнее 15 м, и общий лучший
+  // результат обрывал бы серию на ровном месте (dupl. bot/rules.py).
   S.measure={ex:st.ex,type:e.type,part:part||"",order,pos:0,
-    stopped:{DANIIL:false,ADRIAN:false},
-    best:{DANIIL:null,ADRIAN:null},readyAt:{DANIIL:0,ADRIAN:0},firstDone:{DANIIL:false,ADRIAN:false}};
+    stopped:{}, best:{},
+    readyAt:{DANIIL:0,ADRIAN:0},firstDone:{DANIIL:false,ADRIAN:false}};
   saveSession(); measureAdvance();
 }
+// Ключ серии: свой вариант у каждого игрока.
+function seriesKey(cur){ return cur.player+"|"+(cur.variant||""); }
 function measureAdvance(){
   const m=S.measure;
-  while(m.pos<m.order.length&&m.stopped[m.order[m.pos].player])m.pos++;
+  while(m.pos<m.order.length&&m.stopped[seriesKey(m.order[m.pos])])m.pos++;
   if(m.pos>=m.order.length)return afterMeasure();
   const cur=m.order[m.pos];
   if(cur.firstRest&&!m.firstDone[cur.player]) return screenFullRest(cur);
@@ -1062,6 +1157,9 @@ function afterMeasure(){
     if(!m.deltaShown){ m.deltaShown=true; return screenBreakawayDelta(); }
     if(!m.adrianDone){ m.adrianDone=true; return e15ShotsPick(); }
   }
+  // Упражнение закрыто: снимаем состояние, иначе оно висит в сохранённой
+  // сессии и при возврате в приложение мешает продолжить следующее.
+  delete S.measure; saveSession();
   nextStep();
 }
 function screenBreakawayPart2(){
@@ -1107,16 +1205,18 @@ function e15ShotsPick(){
 function e15ShotsSave(g){
   const s=E15_SHOTS_A;
   pushAttempt({player:"ADRIAN",ex:"E15",variant:s.v,goals:g,shots:s.shots,dist:s.dist});
-  nextStep();
+  delete S.measure; saveSession(); nextStep();
 }
 function screenFullRest(cur){
-  const e=EX[cur.ex], target=Date.now()+90000;
+  // exOf, а не EX[...]: в контрольный день коды слотов E08_D/E08_A.
+  const e=exOf(cur.ex), target=Date.now()+90000;
   h(`<h1>Полный отдых 90 сек</h1>
     <div class="card center"><div class="sub">${RU[cur.player]} · до</div>
       <div class="big">${hhmmss(new Date(target))}</div>
       <div class="big" id="rc"></div></div>
     ${e.firstRestText?`<div class="reps" style="white-space:pre-line">${e.firstRestText}</div>`:""}
-    <div class="row"><button class="go" onclick="finishFullRest()">Готово, на старт</button></div>`);
+    <div class="row"><button class="go" onclick="finishFullRest()">Готово, на старт</button></div>
+    ${smallActions()}`);
   countdownTo(target,"rc");
 }
 function finishFullRest(){ stopCountdown();
@@ -1126,13 +1226,16 @@ function screenRestWait(cur){
   const m=S.measure, other=cur.player==="DANIIL"?"ADRIAN":"DANIIL";
   const readyDt=new Date(m.readyAt[cur.player]);
   h(`<h1>Отдых</h1>
+    ${(m.redo&&m.pos===m.redo.slot)?`<div class="warnbox center">Переписываем попытку ${cur.attempt_no}.</div>`:""}
     <div class="card center"><div class="sub">следующий</div>
       <div class="name">${RU[cur.player]}</div>
       <div class="note">готов в ${hhmmss(readyDt)}</div>
       <div class="big" id="rc"></div></div>
-    ${(!m.stopped[other]&&m.readyAt[other]>Date.now())?
+    ${(m.order.slice(m.pos).some(o=>o.player===other&&!m.stopped[seriesKey(o)])
+       &&m.readyAt[other]>Date.now())?
       `<div class="note center">${RU[other]} готов в ${hhmmss(new Date(m.readyAt[other]))}</div>`:""}
-    <div class="row"><button class="ghost" onclick="skipRest()">Пропустить отдых</button></div>
+    <div class="row"><button class="ghost" onclick="skipRest()">Пропустить отдых</button>
+      <button class="ghost" onclick="measureBack()">Назад</button></div>
     ${smallActions()}`);
   // За 10 секунд уходим на секундомер — отсчёт продолжается уже там,
   // чтобы можно было дать старт в любой момент последних секунд.
@@ -1151,17 +1254,21 @@ function skipRest(){ if(S._restTimer){clearInterval(S._restTimer);S._restTimer=n
   const m=S.measure; m.readyAt[m.order[m.pos].player]=Date.now(); measureAdvance(); }
 
 function screenStopwatch(cur,ready10){
-  const m=S.measure, e=EX[cur.ex];
+  const m=S.measure, e=exOf(cur.ex);
   const forPlayer=m.order.filter(o=>o.player===cur.player);
   const idx=m.order.slice(0,m.pos+1).filter(o=>o.player===cur.player).length;
   const total=forPlayer.length;
   const variantLine=variantLabel(cur);
   let nextInfo="";
-  for(let k=m.pos+1;k<m.order.length;k++){ if(!m.stopped[m.order[k].player]){
+  for(let k=m.pos+1;k<m.order.length;k++){ if(!m.stopped[seriesKey(m.order[k])]){
     nextInfo="Далее: "+RU[m.order[k].player]; break; } }
+  const redo=(m.redo&&m.pos===m.redo.slot)?
+    `<div class="warnbox center">Переписываем попытку ${cur.attempt_no}. Прежний результат `+
+    `${m.redo.prev!==null&&m.redo.prev!==undefined?Number(m.redo.prev).toFixed(2):"не засечено"}`+
+    ` будет заменён.</div>`:"";
   const prev=prevToday(cur.player,cur.ex,cur.variant), rec=recordFor(cur.player,cur.ex,cur.variant);
   const recLine=(prev!==null||rec!==null)?`Пред. ${prev!==null?prev.toFixed(2):"—"} · рекорд ${rec!==null?rec.toFixed(2):"—"}`:"";
-  h(`${ready10?`<div class="warnbox center">ГОТОВНОСТЬ<div id="rc10"></div></div>`:""}
+  h(`${redo}${ready10?`<div class="warnbox center">ГОТОВНОСТЬ<div id="rc10"></div></div>`:""}
     <div class="title">${e.name}</div><div class="hr"></div>
     ${e.watchNote?`<div class="note center">${e.watchNote}</div>`:""}
     <div class="tap" id="tap" onclick="tapWatch()">
@@ -1210,16 +1317,57 @@ function manualEntry(){overlay(`<div class="card"><div class="title">Ручно�
 function parseTime(s){s=(s||"").trim().replace(",",".");if(!s)return null;
   let v=parseFloat(s); if(s.indexOf(".")<0&&v>=100)v=v/100; return isNaN(v)?null:v;}
 function applyManual(){const v=parseTime(document.getElementById("mv").value);closeOverlay();recordTime(v);}
-function measureBack(){const m=S.measure;
-  if(m.pos>0){ const last=S.attempts[S.attempts.length-1];
-    if(last){const a=loadAttempts();a.pop();saveAttempts(a);S.attempts.pop();}
-    m.pos--; }
-  measureAdvance();}
+// Запись слота: обычным ходом создаём новую попытку, при возврате «Назад» —
+// переписываем ту же самую.
+function writeAttempt(cur,fields){
+  const m=S.measure;
+  const o=Object.assign({player:cur.player,ex:cur.ex,variant:cur.variant,
+    attempt_no:cur.attempt_no},fields);
+  const rec=(m.redo&&m.pos===m.redo.slot)?rewriteAttempt(m.redo.uuid,o):pushAttempt(o);
+  m.writing=rec?rec.uuid:null;
+  return rec;
+}
+// Запись, соответствующая слоту: тот же игрок, упражнение, вариант и номер.
+function attemptOf(slot){
+  for(let i=S.attempts.length-1;i>=0;i--){ const a=S.attempts[i];
+    if(a.player===slot.player&&a.exercise_id===slot.ex
+       &&(a.variant||"")===(slot.variant||"")&&a.attempt_no===slot.attempt_no) return a; }
+  return null;
+}
+/* «Назад» — вернуться к предыдущей записанной попытке и ПЕРЕПИСАТЬ её.
+   Новой записи не появляется, номера не сдвигаются; после перезаписи цикл
+   возвращается туда, где был. Раньше кнопка удаляла последнюю запись и
+   сдвигала позицию — из-за этого сбивалась нумерация. */
+function measureBack(){
+  const m=S.measure;
+  if(m.redo) return measureAdvance();            // уже переписываем
+  let k=m.pos-1;
+  while(k>=0&&!attemptOf(m.order[k])) k--;
+  if(k<0) return measureAdvance();               // переписывать нечего
+  const rec=attemptOf(m.order[k]);
+  m.redo={slot:k,uuid:rec.uuid,prev:rec.time_sec,returnPos:m.pos};
+  m.pos=k; saveSession(); measureAdvance();
+}
+// После записи попытки: при перезаписи возвращаемся туда, где были.
+function advanceAfterAttempt(){
+  const m=S.measure;
+  if(m.redo){ m.pos=m.redo.returnPos; m.redo=null; recomputeBest(); }
+  else m.pos++;
+  saveSession(); measureAdvance();
+}
+// Лучшее в каждой серии заново по записям: перезапись могла его изменить.
+function recomputeBest(){
+  const m=S.measure; m.best={};
+  m.order.slice(0,m.pos).forEach(sl=>{
+    const a=attemptOf(sl); if(!a||a.time_sec===null||a.lost)return;
+    const k=seriesKey(sl);
+    m.best[k]=(m.best[k]===undefined)?a.time_sec:Math.min(m.best[k],a.time_sec);
+  });
+}
 
 function recordTime(t,nm){
   const m=S.measure, cur=m.order[m.pos];
-  pushAttempt({player:cur.player,ex:cur.ex,variant:cur.variant,attempt_no:cur.attempt_no,
-    time_sec:t,dist:cur.dist,note:nm?"не засечено":""});
+  writeAttempt(cur,{time_sec:t,dist:cur.dist,note:nm?"не засечено":""});
   // Гол за попытку спрашиваем по флагу слота, а не по типу упражнения:
   // «Отрыв» — свой тип (breakaway), но гол в нём тоже пишется.
   if(cur.goal && t!==null){ return screenGoalAsk(cur,t); }
@@ -1232,11 +1380,10 @@ function lostBall(){
   let t=null;
   if(w&&w.running){ w.running=false; if(w.raf)cancelAnimationFrame(w.raf);
     t=(performance.now()-w.t0)/1000; }
-  pushAttempt({player:cur.player,ex:cur.ex,variant:cur.variant,attempt_no:cur.attempt_no,
-    time_sec:t,dist:cur.dist,lost:true,note:"потеря мяча"});
+  writeAttempt(cur,{time_sec:t,dist:cur.dist,lost:true,note:"потеря мяча"});
   // Ни стоп-правила, ни экрана гола: потеря — это отсутствие завершения.
   m.readyAt[cur.player]=Date.now()+(cur.rest||60)*1000;
-  m.pos++; saveSession(); measureAdvance();
+  advanceAfterAttempt();
 }
 function screenGoalAsk(cur,t){
   h(`<h1>Гол?</h1>
@@ -1247,26 +1394,26 @@ function screenGoalAsk(cur,t){
 }
 function setGoal(g){
   const m=S.measure, cur=m.order[m.pos];
-  const a=S.attempts[S.attempts.length-1]; a.goals=g?1:0; a.shots=1;
+  const a=S.attempts.find(x=>x.uuid===m.writing)||S.attempts[S.attempts.length-1];
+  a.goals=g?1:0; a.shots=1;
   const all=loadAttempts(); const ix=all.findIndex(x=>x.uuid===a.uuid);
   if(ix>=0){all[ix].goals=a.goals;all[ix].shots=a.shots;saveAttempts(all);}
   saveSession();
   finalizeTime(cur, a.time_sec);
 }
 function finalizeTime(cur,t){
-  const m=S.measure;
+  const m=S.measure, key=seriesKey(cur);
   // Стоп-правило: только там, где задан порог, и не в части 2 «Отрыва»
-  // (slot с noStop) — там падение времени и есть измеряемая величина.
-  const th=cur.noStop?null:EX[cur.ex].stopT;
-  if(t!==null && th){
-    const b=m.best[cur.player];
-    if(b!==null && Math.round((t-b)*100)/100>=th) return screenStopRule(cur,b,t);
-    m.best[cur.player]=(b===null)?t:Math.min(b,t);
-  } else if(t!==null){
-    const b=m.best[cur.player]; m.best[cur.player]=(b===null)?t:Math.min(b,t);
-  }
+  // (slot с noStop). Лучшее берётся ВНУТРИ своей серии (игрок+вариант).
+  // При перезаписи попытки серию не обрываем: тренер правит замер, а не
+  // бежит заново.
+  const th=(cur.noStop||m.redo)?null:exOf(cur.ex).stopT;
+  const b=(m.best[key]===undefined)?null:m.best[key];
+  if(t!==null && th && b!==null && Math.round((t-b)*100)/100>=th)
+    return screenStopRule(cur,b,t);
+  if(t!==null) m.best[key]=(b===null)?t:Math.min(b,t);
   m.readyAt[cur.player]=Date.now()+ (cur.rest||60)*1000;
-  m.pos++; saveSession(); measureAdvance();
+  advanceAfterAttempt();
 }
 function screenStopRule(cur,best,t){
   h(`<h1>Стоп-правило</h1>
@@ -1274,14 +1421,16 @@ function screenStopRule(cur,best,t){
       <div class="title">Серия окончена</div>
       <div class="big">Лучшее: ${best.toFixed(2)}</div>
       <div class="note">Последняя ${t.toFixed(2)} — падение ${(t-best).toFixed(2)}.</div></div>
-    <div class="row"><button class="go" onclick="stopSeries('${cur.player}')">Завершить</button>
+    <div class="row"><button class="go" onclick="stopSeries()">Завершить</button>
       <button class="ghost" onclick="continueSeries()">Ещё один</button></div>`);
 }
-function stopSeries(pl){const m=S.measure;m.stopped[pl]=true;m.pos++;measureAdvance();}
-function continueSeries(){const m=S.measure,cur=m.order[m.pos];
-  const t=S.attempts[S.attempts.length-1].time_sec;
-  m.best[cur.player]=Math.min(m.best[cur.player]??Infinity,t);
-  m.readyAt[cur.player]=Date.now()+(cur.rest||60)*1000; m.pos++; measureAdvance();}
+// Обрывается только эта серия (игрок+вариант) — другие варианты идут дальше.
+function stopSeries(){const m=S.measure,cur=m.order[m.pos];
+  m.stopped[seriesKey(cur)]=true;m.pos++;saveSession();measureAdvance();}
+function continueSeries(){const m=S.measure,cur=m.order[m.pos],k=seriesKey(cur);
+  const a=S.attempts.find(x=>x.uuid===m.writing), t=a?a.time_sec:null;
+  if(t!==null) m.best[k]=Math.min(m.best[k]??Infinity,t);
+  m.readyAt[cur.player]=Date.now()+(cur.rest||60)*1000; advanceAfterAttempt();}
 
 /* ---- shots: «забил из N» — общий экран счёта (сейчас только E07) ---- */
 function shotsCount(ex,spec){ return (REPS[ex]&&REPS[ex].DANIIL)||10; }
@@ -1310,6 +1459,8 @@ function shotsSave(g){const s=S.shots;
    минуты набегает сама, пока принимает второй: ждём только остаток до
    готовности, лишнего экрана на полную минуту не появляется. */
 const E13_REST_SEC=60;
+// Отдых между своими подходами в «Ты догоняешь» (dupl. bot/catalog.py).
+const E12_REST_SEC=90;
 function workControl(st){
   const N=receptionsFor(S.spec);
   const order=[];
@@ -1320,23 +1471,32 @@ function workControl(st){
 }
 function ctrlAdvance(){
   const c=S.ctrl;
-  if(c.pos>=c.order.length){        // приёмы кончились — вводим результат
-    c.stage="c"; c.player="DANIIL"; saveSession(); return ctrlRender();
+  if(c.pos>=c.order.length){        // всё записано по ходу — ввода не нужно
+    delete S.ctrl; saveSession(); return nextStep();
   }
   const cur=c.order[c.pos];
   return (c.readyAt[cur.player]-Date.now()>0)?ctrlRest(cur):ctrlRep(cur);
 }
+/* Учёт по КАЖДОМУ приёму, тремя кнопками. Контроль тренер не вводит:
+   он считается из доли удержанных мячей (dupl. bot/rules.control_from_losses). */
 function ctrlRep(cur){
   const c=S.ctrl;
   h(`${countHeader(cur.player,"Приём под опекой",c.N,"приёмов")}
-    <div class="title">Приём ${cur.no} из ${c.N}</div>
+    <div class="title">${RU[cur.player]} · приём ${cur.no} из ${c.N}</div>
     <div class="note">Вариант объявляешь вслух до паса. Между своими приёмами
     ${E13_REST_SEC} секунд отдыха — приложение следит.</div>
-    <div class="row"><button class="go" onclick="ctrlRepDone()">Принял</button></div>
+    <div class="row"><button class="go" onclick="ctrlRepDone('goal')">⚽ ГОЛ</button></div>
+    <div class="row"><button onclick="ctrlRepDone('hold')">✓ УДЕРЖАЛ</button>
+      <button class="warn" onclick="ctrlRepDone('lost')">✕ ПОТЕРЯЛ</button></div>
+    <div class="note">ГОЛ — удержал и забил · УДЕРЖАЛ — удержал, не забил ·
+    ПОТЕРЯЛ — потерял мяч под давлением.</div>
     ${smallActions()}`);
 }
-function ctrlRepDone(){
+function ctrlRepDone(kind){
   const c=S.ctrl, cur=c.order[c.pos];
+  pushAttempt({player:cur.player,ex:c.ex,attempt_no:cur.no,shots:1,
+    goals:kind==="goal"?1:0,lost:kind==="lost",
+    note:kind==="lost"?"потеря мяча":""});
   c.readyAt[cur.player]=Date.now()+E13_REST_SEC*1000;
   c.pos++; saveSession(); ctrlAdvance();
 }
@@ -1353,29 +1513,6 @@ function ctrlRest(cur){
 }
 function ctrlSkipRest(){ stopCountdown();
   const c=S.ctrl; c.readyAt[c.order[c.pos].player]=Date.now(); ctrlAdvance(); }
-function ctrlRender(){
-  const c=S.ctrl;
-  const head=countHeader(c.player,"Приём под опекой",c.N,"приёмов");
-  if(c.stage==="c"){
-    h(`${head}
-      <div class="title">Контроль мяча под давлением</div>
-      <div class="note">1 — терял · 5 — держал уверенно</div>
-      <div class="grid5">${[1,2,3,4,5].map(v=>`<button onclick="ctrlC(${v})">${v}</button>`).join("")}</div>
-      ${smallActions()}`);
-  } else {
-    h(`${head}
-      <div class="title">Сколько забил из ${c.N}?</div>
-      <div class="gridN">${Array.from({length:c.N+1},(_,i)=>`<button onclick="ctrlG(${i})">${i}</button>`).join("")}</div>
-      ${smallActions()}`);
-  }
-}
-function ctrlC(v){S.ctrl._c=v;S.ctrl.stage="g";ctrlRender();}
-function ctrlG(g){const c=S.ctrl;
-  pushAttempt({player:c.player,ex:c.ex,control:c._c,goals:g,shots:c.N});
-  if(c.player==="DANIIL"){c.player="ADRIAN";c.stage="c";delete c._c;return ctrlRender();}
-  delete S.ctrl; nextStep();
-}
-
 /* ---- Удары (E10): 4 серии по подсериям, 45 ударов на игрока ---- */
 const E10_SERIES_NAME={1:"Удары с места",2:"Удары после приёма",3:"Удары с фланга",4:"Рывок на пас"};
 function e10subs(series){return E10_SUB.filter(s=>s.series===series);}
@@ -1469,11 +1606,14 @@ function fourRushSave(g){
   f.pos++; fourRunSub();
 }
 function fourRest(){
-  const target=new Date(Date.now()+25000);
+  const target=Date.now()+25000;
   h(`<h1>Отдых 25 сек</h1>
-    <div class="card center"><div class="sub">до</div><div class="big">${hhmmss(target)}</div></div>
+    <div class="card center"><div class="sub">до</div><div class="big">${hhmmss(new Date(target))}</div>
+      <div class="big" id="rc"></div></div>
     <div class="note">Обязательный отдых между рывками.</div>
-    <div class="row"><button class="go" onclick="fourRushWatch()">Готово, на старт</button></div>`);
+    <div class="row"><button class="go" onclick="stopCountdown();fourRushWatch()">Готово, на старт</button></div>
+    ${smallActions()}`);
+  countdownTo(target,"rc",()=>{});
 }
 
 /* ================================================================
@@ -1516,7 +1656,18 @@ function statsTxt(list,cap){
   if(t.length>=3) parts.push(`разброс ${(Math.max(...t)-best).toFixed(2)}`);
   return parts.join(", ");
 }
-function goalsOf(list){ const l=list.filter(a=>!a.lost&&a.shots);
+// Упражнения, где потеря мяча — результат попытки, а не брак замера:
+// в «Приёме под опекой» она входит в знаменатель (dupl. bot/rules.py).
+const LOST_IS_RESULT=new Set(["E13"]);
+// Контроль мяча: записанная оценка (старые записи) или расчёт по потерям.
+function controlOf(ex,list){
+  const c=list.filter(a=>a.control!==null&&a.control!==undefined).map(a=>a.control);
+  if(c.length) return +(c.reduce((x,y)=>x+y,0)/c.length).toFixed(1);
+  if(!LOST_IS_RESULT.has(ex)||!list.length) return null;
+  const lost=list.filter(a=>a.lost).length;
+  return Math.round(1+4*(list.length-lost)/list.length);
+}
+function goalsOf(list){ const l=list.filter(a=>(!a.lost||LOST_IS_RESULT.has(a.exercise_id))&&a.shots);
   return {g:l.reduce((s,a)=>s+(a.goals||0),0), s:l.reduce((s,a)=>s+(a.shots||0),0)}; }
 function segLabel(ex,a){ const m=SEG_LABELS[ex];
   if(m&&m[a.variant])return m[a.variant];
@@ -1617,9 +1768,11 @@ function summaryChunks(pl){
       continue; }
     if(hasGoals){ q=""; const t=goalsOf(list);
       let line=`${e.name}: ${pctTxt(t.g,t.s)}`;
-      const c=list.filter(a=>a.control!==null&&a.control!==undefined).map(a=>a.control);
-      if(c.length)line+=`, контроль ${+(c.reduce((x,y)=>x+y,0)/c.length).toFixed(1)}`;
-      scores.push(line); }
+      const c=controlOf(ex,list);
+      if(c!==null)line+=`, контроль ${c}`;
+      scores.push(line);
+      const lost=list.filter(a=>a.lost).length;
+      if(lost>0)scores.push(`Потерь мяча: ${lost}`); }
   }
   flush();
   return chunks;
@@ -1779,7 +1932,23 @@ function boot(){
   } else screenHome();
 }
 function resume(){closeOverlay();S=JSON.parse(localStorage.getItem("trening_session"));
-  if(S&&S.steps){S.startMs=performance.now();startSessionClock();runStep();}else screenHome();}
+  if(S&&S.steps){S.startMs=performance.now();startSessionClock();resumeStep();}else screenHome();}
+/* Возврат в занятие: если упражнение уже шло, продолжаем с той же попытки.
+   runStep() запустил бы его заново — тренер переделывал бы серию, а записи
+   задвоились бы. */
+function resumeStep(){
+  const st=S.steps&&S.steps[S.stepIndex];
+  if(st&&st.kind==="work"){
+    if(S.measure&&S.measure.ex===st.ex&&S.measure.pos<S.measure.order.length)
+      return measureAdvance();
+    if(S.ctrl&&S.ctrl.ex===st.ex) return ctrlAdvance();
+    if(S.duelrun&&S.duelrun.ex===st.ex) return duelRunAdvance();
+    if(S.duelg&&S.duelg.ex===st.ex) return duelgRender();
+    if(S.shots&&S.shots.ex===st.ex) return shotsRender();
+    if(S.four&&st.ex==="E10") return fourEnter();
+  }
+  runStep();
+}
 function dropSession(){closeOverlay();clearSession();screenHome();}
 
 if('serviceWorker' in navigator){
