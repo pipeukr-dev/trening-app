@@ -86,7 +86,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260811-0103-bd971d8';
+const BUILD = '20260811-0737-2f09a50';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -117,10 +117,14 @@ const LOST_EXERCISES = new Set(["E04","E05","E15","E10S"]);
    тексты подставляют их отсюда. Иначе правишь одно, а второе остаётся
    старым — так и разъехалось «10 повторов» в «Ведении и ударе». */
 // Дистанции (м): по игроку или по варианту.
+// Рывок после последней фишки — ОДИН И ТОТ ЖЕ элемент в слаломе и зигзаге:
+// выход из тесноты на скорость. Фишка удара во вторник ставится один раз
+// и между упражнениями не двигается (dupl. bot/catalog.py RUSH_M).
+const RUSH={DANIIL:15,ADRIAN:10};
 const DIST={
   E01:{DANIIL:10,ADRIAN:10},
   E02:{"20m":20,"15m":15,"25m_fly":35,"30m_fly":40},
-  E04:{DANIIL:15,ADRIAN:10},
+  E04:{DANIIL:RUSH.DANIIL,ADRIAN:RUSH.ADRIAN},
   E05:{DANIIL:5,ADRIAN:4},
   E06:{DANIIL:5,ADRIAN:4},
   E07:{DANIIL:20,ADRIAN:15},
@@ -142,6 +146,7 @@ const E07_PASS={DANIIL:10,ADRIAN:8};   // пасующий перед прини
 const E13_PASS=12, E13_BACK="16-18";   // пас и позиция принимающего
 const E14_GAP=5;                       // ты между игроком и воротами
 const E10_RUSH_REST=25;                // отдых между рывками серии 4
+const E10_RUSH_START={DANIIL:28,ADRIAN:22};  // откуда стартует на пас
 const E15_CALL={DANIIL:25,ADRIAN:18};  // метр, на котором кричишь УДАР/ПАС
 const FULL_REST_SEC=90;                // полный отдых перед первой попыткой
 // Отдых между повторами (с): число, либо по варианту, либо по игроку.
@@ -213,15 +218,15 @@ const E15_OLD_TIMING="старый формат замера";
 function oldBreakawayTiming(){ return (S&&S.spec?S.spec.iso:"")<=E15_TIMING_CHANGED; }
 // Подсерии «Ударов» (E10): 9 × 5 = 45 ударов на игрока (dupl. bot/catalog.py).
 const E10_SUB=[
-  {v:"s1_near",series:1,kind:"ближняя",timed:false,dist:{DANIIL:15,ADRIAN:13}},
-  {v:"s1_far",series:1,kind:"дальняя",timed:false,dist:{DANIIL:22,ADRIAN:16}},
-  {v:"s2_near",series:2,kind:"ближняя",timed:false,dist:{DANIIL:15,ADRIAN:13}},
-  {v:"s2_far",series:2,kind:"дальняя",timed:false,dist:{DANIIL:22,ADRIAN:16}},
-  {v:"s3_right",series:3,kind:"справа",timed:false,dist:{DANIIL:10,ADRIAN:8}},
-  {v:"s3_left",series:3,kind:"слева",timed:false,dist:{DANIIL:10,ADRIAN:8}},
-  {v:"s4_left",series:4,kind:"слева",timed:true,dist:{DANIIL:17,ADRIAN:13}},
-  {v:"s4_center",series:4,kind:"центр",timed:true,dist:{DANIIL:17,ADRIAN:13}},
-  {v:"s4_right",series:4,kind:"справа",timed:true,dist:{DANIIL:17,ADRIAN:13}},
+  {v:"s1_near",series:1,kind:"ближняя",shots:5,timed:false,dist:{DANIIL:15,ADRIAN:13}},
+  {v:"s1_far",series:1,kind:"дальняя",shots:5,timed:false,dist:{DANIIL:22,ADRIAN:16}},
+  {v:"s2_near",series:2,kind:"ближняя",shots:5,timed:false,dist:{DANIIL:15,ADRIAN:13}},
+  {v:"s2_far",series:2,kind:"дальняя",shots:5,timed:false,dist:{DANIIL:22,ADRIAN:16}},
+  {v:"s3_right",series:3,kind:"справа",shots:5,timed:false,dist:{DANIIL:10,ADRIAN:8}},
+  {v:"s3_left",series:3,kind:"слева",shots:5,timed:false,dist:{DANIIL:10,ADRIAN:8}},
+  {v:"s4_left",series:4,kind:"слева",shots:5,timed:true,dist:{DANIIL:17,ADRIAN:13}},
+  {v:"s4_center",series:4,kind:"центр",shots:5,timed:true,dist:{DANIIL:17,ADRIAN:13}},
+  {v:"s4_right",series:4,kind:"справа",shots:5,timed:true,dist:{DANIIL:17,ADRIAN:13}},
 ];
 
 /* ---------- Звук и вибрация ---------- */
@@ -385,12 +390,15 @@ const MARKUP_SNIPPET = {
   E01:()=>`Даниил: 2 фишки на ${DIST.E01.DANIIL} м — его коридор.\nАдриан: рядом в ${E01_LANE_GAP} м, 2 фишки на ${DIST.E01.ADRIAN} м.\nСтарты по очереди, ты на общем финише.`,
   E02:()=>{const fly=DIST.E02["25m_fly"], run=fly-E02_MEASURE["25m_fly"];
     return `Даниил, одна дорожка: фишки 0 и ${DIST.E02["20m"]} м — забеги с места; фишки ${run} и ${fly} м — длинные (пуск на ${run} м, стоп на ${fly} м).\nАдриан: фишки 0, ${DIST.E02["15m"]} и ${DIST.E02["20m"]} м.\nТы на финише.`;},
-  E04:()=>`${E04_CONES} фишек в линию через ${E04_CONE_GAP} м — общая дорожка.\nОт последней фишки: Даниилу ${DIST.E04.DANIIL} м до удара, Адриану ${DIST.E04.ADRIAN} м. Ворота.`,
-  E05:()=>`${E05_CONES} фишек в шахматном порядке:\nДаниилу ${DIST.E05.DANIIL} м вперёд и ${E05_SIDE.DANIIL} м вбок, Адриану ${DIST.E05.ADRIAN} м вперёд и ${E05_SIDE.ADRIAN} м вбок. Ворота.`,
+  E04:()=>`${E04_CONES} фишек в линию через ${E04_CONE_GAP} м — общая дорожка.\nОт последней фишки рывок: Даниилу ${RUSH.DANIIL} м до удара, Адриану ${RUSH.ADRIAN} м.\nЭта же фишка удара служит зигзагу — ставится один раз. Ворота.`,
+  E05:()=>`${E05_CONES} фишек в шахматном порядке:\nДаниилу ${DIST.E05.DANIIL} м вперёд и ${E05_SIDE.DANIIL} м вбок, Адриану ${DIST.E05.ADRIAN} м вперёд и ${E05_SIDE.ADRIAN} м вбок.\nОт последней фишки рывок: Даниилу ${RUSH.DANIIL} м, Адриану ${RUSH.ADRIAN} м — фишка удара общая со слаломом. Ворота.`,
   E06:()=>`${E06_CONES} фишки в линию: Даниилу через ${DIST.E06.DANIIL} м, Адриану через ${DIST.E06.ADRIAN} м.\nИгрок стартует от средней, лицом к тебе.`,
   E07:()=>`Принимающий спиной к воротам: Даниил в ${DIST.E07.DANIIL} м, Адриан в ${DIST.E07.ADRIAN} м. Ворота.\nТы за его спиной, в 1-2 м (меняешь сторону).\nВторой брат пасует в ноги, в ${E07_PASS.DANIIL} м перед ним (Адриану ${E07_PASS.ADRIAN} м). Потом меняются.`,
-  E10:()=>{const d=(x,pl)=>e10subs(x).map(y=>y.dist[pl]).join("/");
-    return `4 серии, ${e10Total()} ударов на игрока (по ${E10_SUB[0].shots} в подсерии).\nУдар, Даниил / Адриан: с места ${d(1,"DANIIL")} / ${d(1,"ADRIAN")} м, после приёма ${d(2,"DANIIL")} / ${d(2,"ADRIAN")} м.\nФланг ${d(3,"DANIIL")} / ${d(3,"ADRIAN")} м. Рывок ${d(4,"DANIIL")} / ${d(4,"ADRIAN")} м, отдых ${E10_RUSH_REST} сек, замер времени.\nАдриану 4 фишки в воротах (сужают створ + углы). Ворота.`;},
+  E10:()=>`4 серии, ${e10Total()} ударов на игрока (по ${E10_SUB[0].shots} в подсерии).\n`+
+    `С места и после приёма: Даниил ближняя ${e10dist(1,"ближняя","DANIIL")} / дальняя ${e10dist(1,"дальняя","DANIIL")} м, Адриан ${e10dist(1,"ближняя","ADRIAN")} / ${e10dist(1,"дальняя","ADRIAN")} м.\n`+
+    `Фланг: старт от штрафной, удар Даниил ${e10dist(3,"справа","DANIIL")} м, Адриан ${e10dist(3,"справа","ADRIAN")} м.\n`+
+    `Рывок на пас: старт ${E10_RUSH_START.DANIIL} / ${E10_RUSH_START.ADRIAN} м, удар ${e10dist(4,"центр","DANIIL")} / ${e10dist(4,"центр","ADRIAN")} м, отдых ${E10_RUSH_REST} сек, замер времени.\n`+
+    `Адриану 4 фишки в воротах (сужают створ + углы). Ворота.`,
   E10S:(spec)=>`${N_REP(repsOf("E10S","DANIIL",spec))} каждому.\nДаниил: старт от центра поля, ведение до линии штрафной (~${DIST.E10S.DANIIL} м).\nАдриан: старт от линии центрального круга (~${DIST.E10S.ADRIAN} м).\nТочки старта и удара приблизительные, ±2 м. Ворота.`,
   E12:(spec)=>`${N_TRY(duelShotsFor("E12",spec))} каждому. Игрок с мячом в ${DIST.E12.DANIIL} м от ворот.\nТы в двух метрах позади и сбоку. Отдых ${E12_REST_SEC} сек от своего финиша.`,
   E13:()=>`Игрок спиной к воротам, в ${E13_BACK} м от них.\nПасующий в ${E13_PASS} м перед ним, лицом к воротам.\nТы за спиной принимающего.`,
@@ -594,12 +602,14 @@ E04:{ name:"Слалом", type:"time_goal", stopT:0.60,
   rec:"Время каждого прохода и гол да/нет.",
 },
 E05:{ name:"Зигзаг с мячом", type:"time_goal", stopT:0.60,
-  setup:()=>`${E05_CONES} фишек в шахматном порядке.\nДаниилу — ${DIST.E05.DANIIL} м вперёд, ${E05_SIDE.DANIIL} м вбок. Адриану — ${DIST.E05.ADRIAN} м вперёд, ${E05_SIDE.ADRIAN} м вбок.`,
+  setup:()=>`${E05_CONES} фишек в шахматном порядке.\nДаниилу — ${DIST.E05.DANIIL} м вперёд, ${E05_SIDE.DANIIL} м вбок. Адриану — ${DIST.E05.ADRIAN} м вперёд, ${E05_SIDE.ADRIAN} м вбок.\nОт последней фишки рывок к удару: Даниилу ${RUSH.DANIIL} м, Адриану ${RUSH.ADRIAN} м.\nФишка удара та же, что в слаломе, — во вторник ставится один раз.`,
   svg:()=>svg(cone(40,40)+cone(140,40)+cone(240,40)+cone(90,120)+cone(190,120)+
     dim(40,28,140,DIST.E05.DANIIL+" м")+lbl(250,90,E05_SIDE.DANIIL+" м")+
     arrow(30,130,90,120)+arrow(90,120,140,40)+arrow(140,40,190,120)+arrow(190,120,240,40)+
+    arrow(245,40,288,30)+lbl(232,22,"рывок "+RUSH.DANIIL+" м")+goal(288,20)+
     mark(15,135,"X")+ball(28,138)),
   steps:(spec)=>["Обводит каждую фишку с мячом, после последней — рывок и удар.",
+    `Рывок после последней фишки: Даниилу ${RUSH.DANIIL} м, Адриану ${RUSH.ADRIAN} м — та же фишка удара, что в слаломе.`,
     `${N_PASS(repsOf("E05","DANIIL",spec))} каждому.`],
   reps_text:(spec)=>`${N_PASS(repsOf("E05","DANIIL",spec))} каждому.`,
   why:`Ширина ${E05_SIDE.DANIIL} м при длине ${DIST.E05.DANIIL} даёт угол ~105° — резкий разворот на опорной ноге. Уже — широкий слалом, шире — остановка.`,
@@ -678,13 +688,13 @@ E10:{ name:"Удары", type:"four",
     return [`Серия 1 · с места · ${n(1)}: подсерия ближняя ${k} + дальняя ${k}.`,
     `Серия 2 · после приёма · ${n(2)}: пас в ноги, максимум 3 касания. Ближняя ${k} + дальняя ${k}.`,
     `Серия 3 · с фланга в одно касание · ${n(3)}: справа ${k} + слева ${k}. Ты катишь низом поперёк.`,
-    `Серия 4 · рывок на пас · ${n(4)}: слева/центр/справа по ${k}. Секундомер от паса до удара, отдых ${E10_RUSH_REST} сек, угол называешь в момент паса.`,
+    `Серия 4 · рывок на пас · ${n(4)}: слева/центр/справа по ${k}. Старт с ${E10_RUSH_START.DANIIL} м (Адриану ${E10_RUSH_START.ADRIAN} м), секундомер от паса до удара, отдых ${E10_RUSH_REST} сек, угол называешь в момент паса.`,
     "Игрок делает всю серию (все подсерии), потом второй. Порядок подсерии выбираешь первым нажатием, дальше приложение ведёт само."];},
   // Дистанции ударов — из таблицы подсерий, по каждой серии.
-  reps_text:()=>{const d=(s,pl)=>e10subs(s).map(x=>x.dist[pl]).join("/");
-    return `Дистанции удара, Даниил / Адриан: с места ${d(1,"DANIIL")} / ${d(1,"ADRIAN")} м, `+
-      `после приёма ${d(2,"DANIIL")} / ${d(2,"ADRIAN")} м,\nс фланга ${d(3,"DANIIL")} / ${d(3,"ADRIAN")} м, `+
-      `рывок на пас ${d(4,"DANIIL")} / ${d(4,"ADRIAN")} м.`;},
+  reps_text:()=>`Удар, Даниил / Адриан: ближняя ${e10dist(1,"ближняя","DANIIL")} / ${e10dist(1,"ближняя","ADRIAN")} м, `+
+    `дальняя ${e10dist(1,"дальняя","DANIIL")} / ${e10dist(1,"дальняя","ADRIAN")} м.\n`+
+    `Фланг ${e10dist(3,"справа","DANIIL")} / ${e10dist(3,"справа","ADRIAN")} м. `+
+    `Рывок: старт ${E10_RUSH_START.DANIIL} / ${E10_RUSH_START.ADRIAN} м, удар ${e10dist(4,"центр","DANIIL")} / ${e10dist(4,"центр","ADRIAN")} м.`,
   smotri:"Опорная нога рядом с мячом, голова над мячом. В серии 4 — два касания после рывка: подработал, пробил.",
   oshibka:"Бьёт максимально сильно вместо точно. После приёма 4-5 касаний. В рывке тормозит перед ударом.",
   pravilno:"Удар не позже третьего касания и в створ; в серии 4 — в названный угол.",
@@ -1619,6 +1629,11 @@ function ctrlSkipRest(){ stopCountdown();
 const E10_SERIES_NAME={1:"Удары с места",2:"Удары после приёма",3:"Удары с фланга",4:"Рывок на пас"};
 function e10subs(series){return E10_SUB.filter(s=>s.series===series);}
 function e10Total(){return E10_SUB.reduce((a,s)=>a+s.shots,0);}
+// Дистанция удара конкретной подсерии — чтобы тексты не собирали её строкой.
+function e10dist(series,kind,player){
+  const sub=e10subs(series).find(s=>s.kind===kind)||e10subs(series)[0];
+  return sub.dist[player];
+}
 function e10SeriesShots(series){return e10subs(series).reduce((a,s)=>a+s.shots,0);}
 function workFour(st){ S.four={series:1,player:"DANIIL",queue:null,pos:0}; fourEnter(); }
 // Вход в (серия, игрок): экран выбора первой подсерии.
@@ -1654,30 +1669,30 @@ function fourSeriesBreak(){
 // Подсерия без замера (серии 1-3): экран удара → учёт голов из 5.
 function fourAggShot(sub){
   const f=S.four, d=sub.dist[f.player];
-  h(`${countHeader(f.player,E10_SERIES_NAME[f.series],5,"ударов")}
+  h(`${countHeader(f.player,E10_SERIES_NAME[f.series],sub.shots,"ударов")}
     <div class="title">${sub.kind} · ${d} м</div>
-    <div class="note">5 ударов подряд, затем введи, сколько забил.</div>
+    <div class="note">${sub.shots} ударов подряд, затем введи, сколько забил.</div>
     <div class="row"><button class="go" onclick="fourAggGoals('${sub.v}')">Ввести голы</button></div>
     ${smallActions()}`);
 }
 function fourAggGoals(v){
   const f=S.four, sub=E10_SUB.find(s=>s.v===v), d=sub.dist[f.player];
-  h(`${countHeader(f.player,E10_SERIES_NAME[f.series]+" · "+sub.kind+" "+d+" м",5,"ударов")}
-    <div class="title">Сколько забил из 5?</div>
-    <div class="gridN">${Array.from({length:6},(_,i)=>`<button onclick="fourAggSave('${v}',${i})">${i}</button>`).join("")}</div>
+  h(`${countHeader(f.player,E10_SERIES_NAME[f.series]+" · "+sub.kind+" "+d+" м",sub.shots,"ударов")}
+    <div class="title">Сколько забил из ${sub.shots}?</div>
+    <div class="gridN">${Array.from({length:sub.shots+1},(_,i)=>`<button onclick="fourAggSave('${v}',${i})">${i}</button>`).join("")}</div>
     ${smallActions()}`);
 }
 function fourAggSave(v,goals){
   const f=S.four, sub=E10_SUB.find(s=>s.v===v);
   pushAttempt({player:f.player,ex:"E10",variant:v,attempt_no:f.pos+1,
-    goals,shots:5,dist:sub.dist[f.player]});
+    goals,shots:sub.shots,dist:sub.dist[f.player]});
   f.pos++; fourRunSub();
 }
 // Серия 4: 5 рывков, каждый с секундомером, гол и отдыхом 25 сек.
 function fourRushWatch(){
   const f=S.four, sub=f.rush.sub, d=sub.dist[f.player];
-  h(`${countHeader(f.player,"Рывок · "+sub.kind,5,"рывков")}
-    <div class="note">Удар ${f.rush.shot} из 5 · удар с ${d} м · угол называешь в момент паса</div>
+  h(`${countHeader(f.player,"Рывок · "+sub.kind,sub.shots,"рывков")}
+    <div class="note">Удар ${f.rush.shot} из ${sub.shots} · старт с ${E10_RUSH_START[f.player]} м · удар с ${d} м · угол называешь в момент паса</div>
     <div class="tap" id="tap" onclick="fourRushTap()">
       <div class="num" id="num">0.00</div><div class="note" id="hint">тап = старт (пас)</div></div>
     ${smallActions()}`);
@@ -1706,7 +1721,7 @@ function fourRushSave(g){
   const f=S.four, sub=f.rush.sub;
   pushAttempt({player:f.player,ex:"E10",variant:sub.v,attempt_no:f.rush.shot,
     time_sec:f.rush.t,goals:g?1:0,shots:1,dist:sub.dist[f.player]});
-  if(f.rush.shot<5){ f.rush.shot++; return fourRest(); }
+  if(f.rush.shot<sub.shots){ f.rush.shot++; return fourRest(); }
   f.pos++; fourRunSub();
 }
 function fourRest(){
