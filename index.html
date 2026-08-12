@@ -75,6 +75,9 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
 .reps{background:#fffef8;border:2px solid var(--line);border-radius:10px;padding:8px;margin:6px 0}
 .build{color:var(--muted);font-size:12px;text-align:center;margin-top:8px}
 .build button{margin-left:8px;min-height:32px;font-size:12px;padding:4px 10px}
+/* Отмена занятия — отдельной строкой, с отступом от служебного ряда. */
+.cancel-row{display:flex;margin-top:14px}
+.cancel-row button{flex:0 0 auto;min-width:150px;opacity:.85}
 </style>
 </head>
 <body>
@@ -86,7 +89,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260811-1037-7d90f25';
+const BUILD = '20260812-1235-ce400e7';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -821,9 +824,47 @@ function loadAttempts(){return JSON.parse(localStorage.getItem("trening_attempts
 function saveAttempts(a){localStorage.setItem("trening_attempts",JSON.stringify(a));}
 function records(){return JSON.parse(localStorage.getItem("trening_records")||"{}");}
 function pctRecords(){return JSON.parse(localStorage.getItem("trening_pct")||"{}");}
-// Рекорд процента попадания из слепка. null — слепка нет, строку не пишем.
-function pctRecordFor(player,ex){const p=pctRecords()[player];
-  return (p&&p[ex]!==undefined&&p[ex]!==null)?p[ex]:null;}
+
+/* РЕКОРДЫ. Приложение считает их САМО по своей истории в localStorage:
+   слепок «Импорт рекордов» тренер вставляет уже после занятия, и на экране
+   итога сравнивать было бы не с чем. Слепок при этом не игнорируется — он
+   помнит занятия, проведённые до установки приложения, поэтому берётся
+   лучшее из двух источников.
+
+   В рекорд не идут потери мяча и попытки с пометкой «сбой замера»
+   (dupl. bot/rules.py counts_for_record). История — строго ДО текущего дня. */
+const BROKEN_NOTE="сбой замера";
+function countsForRecord(a){
+  return !a.is_warmup && !a.lost && a.time_sec!==null && a.time_sec!==undefined
+    && String(a.note||"").indexOf(BROKEN_NOTE)<0;
+}
+function historyBefore(player,ex,day){
+  return loadAttempts().filter(a=>a.player===player&&a.exercise_id===ex&&a.date<day);
+}
+// Лучшее время за всю историю до этого занятия: локальная база плюс слепок.
+function timeRecord(player,ex,variant,day){
+  const local=historyBefore(player,ex,day)
+    .filter(a=>(a.variant||"")===(variant||"")&&countsForRecord(a))
+    .map(a=>a.time_sec);
+  const snap=(records()[player]||{})[ex+"|"+(variant||"")];
+  const all=local.concat((snap===undefined||snap===null)?[]:[snap]);
+  return all.length?Math.min(...all):null;
+}
+// Лучший процент попадания за занятие до этого дня: локальная база и слепок.
+function ratioRecord(player,ex,day,variant){
+  const byDay={};
+  historyBefore(player,ex,day).forEach(a=>{
+    if((variant!==undefined&&variant!==null)&&(a.variant||"")!==variant)return;
+    if(a.lost&&!LOST_IS_RESULT.has(a.exercise_id))return;
+    if(!a.shots)return;
+    const d=byDay[a.date]=byDay[a.date]||{g:0,s:0};
+    d.g+=a.goals||0; d.s+=a.shots;
+  });
+  const local=Object.values(byDay).filter(d=>d.s).map(d=>100*d.g/d.s);
+  const snap=(variant===undefined||variant===null)?(pctRecords()[player]||{})[ex]:undefined;
+  const all=local.concat((snap===undefined||snap===null)?[]:[snap]);
+  return all.length?Math.max(...all):null;
+}
 function unsynced(){return loadAttempts().filter(a=>!a.uploaded).length;}
 function uuid(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
   const r=Math.random()*16|0,v=c==='x'?r:(r&0x3|0x8);return v.toString(16);});}
@@ -880,12 +921,25 @@ function closeOverlay(){const o=document.getElementById("ovl");if(o)o.remove();}
 function toast(msg){overlay(`<div class="card center"><div>${msg}</div>
   <div class="row"><button class="go" onclick="closeOverlay()">Ок</button></div></div>`);}
 
+/* Служебные кнопки экрана работы. «Отмена занятия» вынесена отдельной
+   строкой с отступом и закрыта подтверждением: в общем ряду её задевали
+   локтем — пять кнопок в ряд слишком тесно. */
 function smallActions(){return `<div class="small-actions">
   <button class="ghost small" onclick="showBlockScheme()">Схема</button>
   <button class="ghost small" onclick="showBlockWhat()">Что делать</button>
   <button class="ghost small" onclick="askNote()">Заметка</button>
-  <button class="ghost small" onclick="confirmFinishExercise()">Завершить упражнение</button>
-  <button class="warn small" onclick="screenCancel()">Отмена занятия</button></div>`;}
+  <button class="ghost small" onclick="confirmFinishExercise()">Завершить упражнение</button></div>
+  <div class="cancel-row"><button class="warn small" onclick="confirmCancel()">Отмена занятия</button></div>`;}
+function confirmCancel(){
+  overlay(`<div class="card"><div class="title">Отменить занятие?</div>
+    <div class="note">Прогресс сохранится: записанные попытки останутся
+    и уйдут при выгрузке.</div>
+    <div class="warnbox">Критерии остановки: выше 32 °C в тени · озноб ·
+    гусиная кожа · прекратилось потоотделение · головная боль.</div>
+    <div class="row"><button class="warn" onclick="cancelSession()">Да, отменить</button>
+      <button class="go" onclick="closeOverlay();resumeStep()">Продолжить</button></div></div>`);
+}
+function cancelSession(){ closeOverlay(); stopCountdown(); stopRestBadge(); screenHome(); }
 /* Завершить УПРАЖНЕНИЕ — не занятие. Записанное остаётся, занятие идёт
    дальше со следующего блока; заминка и итог никуда не деваются. Раньше
    единственной кнопкой была «Отмена», и остановка упражнения обрывала
@@ -924,10 +978,35 @@ function showBlockWhat(){
     <div class="row"><button class="go" onclick="closeOverlay()">Назад к работе</button></div></div>`);
 }
 // Шапка экрана ввода счёта: игрок · упражнение · «Выполнено <word>: N».
-function countHeader(player,exName,n,word){
+/* Шапка блока. done задан — показываем реальный прогресс «выполнено X из N»;
+   не задан (агрегатный ввод после серии) — сколько всего в блоке. Раньше
+   писалось «Выполнено подходов: 5», когда выполнен был один: из-за этого
+   казалось, что серия идёт по второму кругу. */
+function countHeader(player,exName,n,word,done){
+  const line=(done===undefined||done===null)
+    ? `Всего ${word} в блоке: ${n}`
+    : `Выполнено ${word}: ${done} из ${n}`;
   return `<div class="card"><div class="name" style="font-size:22px">${RU[player]||player} · ${exName}</div>
-    <div class="note">Выполнено ${word}: ${n}</div></div>`;
+    <div class="note">${line}</div></div>`;
 }
+/* Состояние отдыха второго брата на экране того, кто работает: «Даниил
+   отдыхает, готов через 0:34». Тикает раз в секунду, по готовности исчезает. */
+let restTimer=null;
+function stopRestBadge(){ if(restTimer){clearInterval(restTimer);restTimer=null;} }
+function restBadge(elId,player,readyAt){
+  stopRestBadge();
+  const tick=()=>{
+    const el=document.getElementById(elId);
+    if(!el){ stopRestBadge(); return; }
+    const left=Math.ceil((readyAt-Date.now())/1000);
+    if(left<=0){ el.textContent=`${RU[player]} готов`; stopRestBadge(); return; }
+    const m=Math.floor(left/60), sec=String(left%60).padStart(2,"0");
+    el.textContent=`${RU[player]} отдыхает, готов через ${m}:${sec}`;
+  };
+  tick(); restTimer=setInterval(tick,1000);
+}
+// Кого показывать в этой строке: второй брат, если он ещё отдыхает.
+function otherRestHtml(){ return `<div class="note center" id="rest-other"></div>`; }
 function askNote(){overlay(`<div class="card"><div class="title">Заметка · к кому?</div>
   <div class="row"><button onclick="noteFor('DANIIL')">Даниил</button>
    <button onclick="noteFor('ADRIAN')">Адриан</button>
@@ -1193,13 +1272,17 @@ function duelRunAdvance(){
   return (d.readyAt[cur.player]-Date.now()>0)?duelRunRest(cur):duelRunRep(cur);
 }
 function duelRunRep(cur){
-  const d=S.duelrun;
-  h(`${countHeader(cur.player,EX[d.ex].name,d.N,"подходов")}
+  const d=S.duelrun, other=cur.player==="DANIIL"?"ADRIAN":"DANIIL";
+  const done=d.order.slice(0,d.pos).filter(o=>o.player===cur.player).length;
+  h(`${countHeader(cur.player,EX[d.ex].name,d.N,"подходов",done)}
     <div class="title">${RU[cur.player]} · подход ${cur.no} из ${d.N}</div>
     <div class="note">Второй в это время отдыхает. Отдых ${E12_REST_SEC} секунд
     от своего финиша — приложение следит.</div>
     <div class="row"><button class="go" onclick="duelRunDone()">Выполнил</button></div>
+    ${otherRestHtml()}
     ${smallActions()}`);
+  if(d.readyAt[other]>Date.now()) restBadge("rest-other",other,d.readyAt[other]);
+  else stopRestBadge();
 }
 function duelRunDone(){
   const d=S.duelrun, cur=d.order[d.pos];
@@ -1368,6 +1451,7 @@ function skipRest(){ if(S._restTimer){clearInterval(S._restTimer);S._restTimer=n
 
 function screenStopwatch(cur,ready10){
   const m=S.measure, e=exOf(cur.ex);
+  const other=cur.player==="DANIIL"?"ADRIAN":"DANIIL";
   const forPlayer=m.order.filter(o=>o.player===cur.player);
   const idx=m.order.slice(0,m.pos+1).filter(o=>o.player===cur.player).length;
   const total=forPlayer.length;
@@ -1391,6 +1475,7 @@ function screenStopwatch(cur,ready10){
       <div class="note" id="hint">тап = старт</div></div>
     <div class="note">${recLine}</div>
     <div class="note">${nextInfo}</div>
+    ${otherRestHtml()}
     <div class="row">
       <button class="ghost small" onclick="notMeasured()">Не засёк</button>
       ${LOST_EXERCISES.has(cur.ex)?`<button class="warn small" onclick="lostBall()">Потерял мяч</button>`:""}
@@ -1399,6 +1484,9 @@ function screenStopwatch(cur,ready10){
     ${smallActions()}`);
   // Последние секунды отдыха отсчитываются вслух и цифрами на весь экран.
   if(ready10) countdownTo(m.readyAt[cur.player],"rc10");
+  // Пока этот работает, второй отдыхает — видно, сколько ему осталось.
+  if(m.readyAt[other]>Date.now()) restBadge("rest-other",other,m.readyAt[other]);
+  else stopRestBadge();
   S.watch={running:false,t0:0,cur};
 }
 function variantLabel(cur){
@@ -1595,8 +1683,9 @@ function ctrlAdvance(){
 /* Учёт по КАЖДОМУ приёму, тремя кнопками. Контроль тренер не вводит:
    он считается из доли удержанных мячей (dupl. bot/rules.control_from_losses). */
 function ctrlRep(cur){
-  const c=S.ctrl;
-  h(`${countHeader(cur.player,"Приём под опекой",c.N,"приёмов")}
+  const c=S.ctrl, other=cur.player==="DANIIL"?"ADRIAN":"DANIIL";
+  const done=c.order.slice(0,c.pos).filter(o=>o.player===cur.player).length;
+  h(`${countHeader(cur.player,"Приём под опекой",c.N,"приёмов",done)}
     <div class="title">${RU[cur.player]} · приём ${cur.no} из ${c.N}</div>
     <div class="note">Вариант объявляешь вслух до паса. Между своими приёмами
     ${E13_REST_SEC} секунд отдыха — приложение следит.</div>
@@ -1605,7 +1694,10 @@ function ctrlRep(cur){
       <button class="warn" onclick="ctrlRepDone('lost')">✕ ПОТЕРЯЛ</button></div>
     <div class="note">ГОЛ — удержал и забил · УДЕРЖАЛ — удержал, не забил ·
     ПОТЕРЯЛ — потерял мяч под давлением.</div>
+    ${otherRestHtml()}
     ${smallActions()}`);
+  if(c.readyAt[other]>Date.now()) restBadge("rest-other",other,c.readyAt[other]);
+  else stopRestBadge();
 }
 function ctrlRepDone(kind){
   const c=S.ctrl, cur=c.order[c.pos];
@@ -1748,7 +1840,7 @@ function screenCancel(){
     выше 32 °C в тени · озноб · гусиная кожа ·
     прекратилось потоотделение · головная боль.</div>
     <div class="row"><button class="warn" onclick="screenHome()">Остановить занятие</button></div>
-    <div class="row"><button class="ghost" onclick="runStep()">Назад к занятию</button></div>`);
+    <div class="row"><button class="ghost" onclick="resumeStep()">Продолжить занятие</button></div>`);
 }
 function screenSummary(){
   if(sessionTimer){clearInterval(sessionTimer);sessionTimer=null;}
@@ -1776,7 +1868,10 @@ function exOf(ex){ return EX[ex]||EX[ex.replace(/_[DA]$/,"")]||null; }
 function txt(v,spec){ return (typeof v==="function")?v(spec||(S&&S.spec)):(v||""); }
 function stepsOf(e,spec){ return txt(e.steps,spec); }
 function pctTxt(g,s){ return s?`${g} из ${s} (${Math.round(100*g/s)}%)`:"—"; }
-function scoringTimes(list){ return list.filter(a=>a.time_sec!==null&&!a.lost).map(a=>a.time_sec); }
+// Время идёт в расчёт, если попытка не потеряна и замер не сбит: «сбой
+// замера» означает, что секунды есть, но они не про то (dupl. bot/rules.py).
+function scoringTimes(list){ return list.filter(a=>a.time_sec!==null&&!a.lost
+  &&String(a.note||"").indexOf(BROKEN_NOTE)<0).map(a=>a.time_sec); }
 /* Строка времени: лучшее, среднее и РЕКОРД за всё время (разброса нет —
    на поле по нему решений не принимают). Рекорд берётся из слепка
    «Импорт рекордов»; слепка нет — про рекорд молчим, бот всё равно
@@ -1786,7 +1881,9 @@ function statsTxt(list,cap,record){
   const t=scoringTimes(list); if(!t.length)return null;
   const best=Math.min(...t), avg=t.reduce((x,y)=>x+y,0)/t.length;
   const parts=[`${cap?"Лучшее":"лучшее"} ${best.toFixed(2)}`,`среднее ${avg.toFixed(2)}`];
-  if(record!==undefined&&record!==null) parts.push(`рекорд ${record.toFixed(2)}`);
+  // Истории нет — так и пишем, строку не прячем.
+  parts.push((record===undefined||record===null)?"рекорд не установлен"
+                                               :`рекорд ${record.toFixed(2)}`);
   return parts.join(", ");
 }
 // Строка нового рекорда — с пустой строкой сверху и снизу.
@@ -1797,7 +1894,8 @@ function recordLines(list,record){
   if(best>=record)return [];
   return ["",`${NEW_RECORD} Прежний ${record.toFixed(2)}, улучшение ${(record-best).toFixed(2)}`,""];
 }
-function pctTail(record){return (record===null||record===undefined)?"":`, рекорд ${Math.round(record)}%`;}
+function pctTail(record){return (record===null||record===undefined)
+  ?", рекорд не установлен":`, рекорд ${Math.round(record)}%`;}
 function pctRecordLines(g,s,record){
   if(!s||record===null||record===undefined)return [];
   const pct=Math.round(100*g/s), prev=Math.round(record);
@@ -1828,7 +1926,7 @@ function pureTimeLines(ex,list,player){
     groups[seen[l]][1].push(a);});
   const out=[];
   groups.forEach(([l,g])=>{
-    const rec=recordFor(player,ex,g[0].variant);
+    const rec=timeRecord(player,ex,g[0].variant,S.spec.iso);
     const s=statsTxt(g,false,rec);
     if(!s)return;
     out.push(`${l}: ${s}`);
@@ -1837,8 +1935,8 @@ function pureTimeLines(ex,list,player){
   return out;
 }
 function timeGoalChunk(e,list,player){
-  const rec=recordFor(player,list[0].exercise_id,list[0].variant);
-  const pctRec=pctRecordFor(player,list[0].exercise_id);
+  const rec=timeRecord(player,list[0].exercise_id,list[0].variant,S.spec.iso);
+  const pctRec=ratioRecord(player,list[0].exercise_id,S.spec.iso);
   const lines=[], s=statsTxt(list,true,rec), t=goalsOf(list);
   if(s){ lines.push(s); recordLines(list,rec).forEach(x=>lines.push(x)); }
   if(t.s){ lines.push(`Голы: ${pctTxt(t.g,t.s)}${pctTail(pctRec)}`);
@@ -1862,14 +1960,19 @@ function shotsChunk(list,total,player){
     if(a.time_sec!==null)by[v].t.push(a.time_sec);});
   const lines=[];
   E10_SERIES.forEach(([title,subs])=>{
-    const parts=subs.filter(([v])=>by[v]).map(([v,cap])=>`${cap} ${pctTxt(by[v].g,by[v].s)}`);
+    const parts=subs.filter(([v])=>by[v]).map(([v,cap])=>
+      `${cap} ${pctTxt(by[v].g,by[v].s)}${pctTail(ratioRecord(player,"E10",S.spec.iso,v))}`);
     if(!parts.length)return;
     lines.push(`${title}: ${parts.join(", ")}`);
     const t=[].concat(...subs.map(([v])=>(by[v]||{t:[]}).t));
-    if(t.length)lines.push(" ".repeat(title.length+2)+
-      `лучшее ${Math.min(...t).toFixed(2)}, среднее ${(t.reduce((x,y)=>x+y,0)/t.length).toFixed(2)}`);
+    if(t.length){
+      const tr=subs.map(([v])=>timeRecord(player,"E10",v,S.spec.iso)).filter(x=>x!==null);
+      const recTxt=tr.length?`рекорд ${Math.min(...tr).toFixed(2)}`:"рекорд не установлен";
+      lines.push(" ".repeat(title.length+2)+
+        `лучшее ${Math.min(...t).toFixed(2)}, среднее ${(t.reduce((x,y)=>x+y,0)/t.length).toFixed(2)}, ${recTxt}`);
+    }
   });
-  const rec=pctRecordFor(player,"E10");
+  const rec=ratioRecord(player,"E10",S.spec.iso);
   lines.push(`Всего ударов: ${pctTxt(total.g,total.s)}${pctTail(rec)}`);
   pctRecordLines(total.g,total.s,rec).forEach(x=>lines.push(x));
   return {h:"Удары",lines};
@@ -1879,7 +1982,7 @@ function breakawayChunks(list,player){
   const subs=list.filter(a=>a.variant===E15_SHOTS_A.v);
   const lines=[];
   if(fresh.length){
-    const rec=recordFor(player,"E15",E15_FRESH), pctRec=pctRecordFor(player,"E15");
+    const rec=timeRecord(player,"E15",E15_FRESH,S.spec.iso), pctRec=ratioRecord(player,"E15",S.spec.iso);
     const s=statsTxt(fresh,!tired.length,rec), t=goalsOf(fresh);
     if(tired.length){
       if(s){ lines.push(`Свежие: ${s}`); recordLines(fresh,rec).forEach(x=>lines.push(x)); }
@@ -1892,23 +1995,33 @@ function breakawayChunks(list,player){
   if(tired.length){
     const tt=tired.slice().sort((a,b)=>a.attempt_no-b.attempt_no)
       .filter(a=>a.time_sec!==null&&!a.lost).map(a=>a.time_sec);
-    if(tt.length)lines.push("На усталости: "+tt.map(x=>x.toFixed(2)).join(" → "));
+    if(tt.length){
+      const tr=timeRecord(player,"E15",E15_TIRED,S.spec.iso);
+      lines.push("На усталости: "+tt.map(x=>x.toFixed(2)).join(" → ")+
+        (tr===null?", рекорд не установлен":`, рекорд ${tr.toFixed(2)}`));
+    }
     if(tt.length>=2){ const d=Math.round((tt[tt.length-1]-tt[0])*100)/100;
       // По старому отрезку дельту не трактуем — ставим пометку.
       const v=oldBreakawayTiming()?E15_OLD_TIMING
         :d<0.3?"способен повторить отрыв":d<=0.6?"на границе"
         :"не способен, ноги не восстанавливаются между всплесками";
       lines.push(`  дельта 1-3: ${d.toFixed(2)} — ${v}`); }
-    const t=goalsOf(tired); if(t.s)lines.push(`  голы ${pctTxt(t.g,t.s)}`);
+    const t=goalsOf(tired), tRec=ratioRecord(player,"E15",S.spec.iso,E15_TIRED);
+    if(t.s){ lines.push(`  голы ${pctTxt(t.g,t.s)}${pctTail(tRec)}`);
+      pctRecordLines(t.g,t.s,tRec).forEach(x=>lines.push(x)); }
   }
   const lost=fresh.concat(tired).filter(a=>a.lost).length;
   if(lost>0)lines.push(`Потерь мяча: ${lost}`);
   const out=lines.length?[{h:"Отрыв",lines}]:[];
   // Часть 2 Адриана: удары с места, дистанция названа явно.
   if(subs.length){
-    const t=goalsOf(subs);
-    if(t.s)out.push({lines:[`${E15_SHOTS_A.name}: ${pctTxt(t.g,t.s)}, `+
-      `${E15_SHOTS_A.kind} ${E15_SHOTS_A.range}`]});
+    const t=goalsOf(subs), sRec=ratioRecord(player,"E15",S.spec.iso,E15_SHOTS_A.v);
+    if(t.s){
+      const block=[`${E15_SHOTS_A.name}: ${pctTxt(t.g,t.s)}, `+
+        `${E15_SHOTS_A.kind} ${E15_SHOTS_A.range}${pctTail(sRec)}`];
+      pctRecordLines(t.g,t.s,sRec).forEach(x=>block.push(x));
+      out.push({lines:block});
+    }
   }
   return out;
 }
@@ -1933,7 +2046,7 @@ function summaryChunks(pl){
       if(qq===q&&chunks.length) chunks[chunks.length-1].lines.push(...lines);
       else { q=qq; chunks.push({h:qq,lines}); }
       continue; }
-    if(hasGoals){ q=""; const t=goalsOf(list), pctRec=pctRecordFor(pl,ex);
+    if(hasGoals){ q=""; const t=goalsOf(list), pctRec=ratioRecord(pl,ex,S.spec.iso);
       let line=`${e.name}: ${pctTxt(t.g,t.s)}`;
       const c=controlOf(ex,list);
       if(c!==null)line+=`, контроль ${c}`;
