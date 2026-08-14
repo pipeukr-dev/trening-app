@@ -89,7 +89,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260812-1235-ce400e7';
+const BUILD = '20260814-1120-456af41';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -881,7 +881,8 @@ function attemptFields(o){
     time_sec:(o.time_sec!==undefined&&o.time_sec!==null)?Number(Number(o.time_sec).toFixed(2)):null,
     distance_m:o.dist||o.distance_m||null,control:o.control??null,goals:o.goals??null,
     shots:o.shots??null,wellbeing:o.wellbeing??null,
-    shortened:(S.spec.shortened||S.shortened||false),note:o.note||"",lost:!!o.lost};
+    shortened:(S.spec.shortened||S.shortened||false),note:o.note||"",lost:!!o.lost,
+    interrupted:!!(S&&S.interrupted)};
 }
 function pushAttempt(o){
   const a=loadAttempts();
@@ -939,7 +940,21 @@ function confirmCancel(){
     <div class="row"><button class="warn" onclick="cancelSession()">Да, отменить</button>
       <button class="go" onclick="closeOverlay();resumeStep()">Продолжить</button></div></div>`);
 }
-function cancelSession(){ closeOverlay(); stopCountdown(); stopRestBadge(); screenHome(); }
+/* Занятие оборвано: жара, отмена, упражнение закрыто на середине. Записи
+   сохраняются целиком, но помечаются interrupted — в рекорды и недельные
+   проценты они не идут: одна подсерия из девяти дала бы «8 из 8 (100%)». */
+function markInterrupted(){
+  if(!S)return;
+  S.interrupted=true;
+  const mine=new Set((S.attempts||[]).map(a=>a.uuid));
+  const all=loadAttempts();
+  all.forEach(a=>{ if(mine.has(a.uuid)){a.interrupted=true;a.uploaded=false;} });
+  saveAttempts(all);
+  (S.attempts||[]).forEach(a=>{a.interrupted=true;});
+  saveSession();
+}
+function cancelSession(){ markInterrupted(); closeOverlay(); stopCountdown();
+  stopRestBadge(); screenHome(); }
 /* Завершить УПРАЖНЕНИЕ — не занятие. Записанное остаётся, занятие идёт
    дальше со следующего блока; заминка и итог никуда не деваются. Раньше
    единственной кнопкой была «Отмена», и остановка упражнения обрывала
@@ -953,7 +968,14 @@ function confirmFinishExercise(){
       <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
 }
 function finishExercise(){
-  closeOverlay(); stopCountdown();
+  // Упражнение закрыто, не дойдя до конца серии — занятие считается
+  // прерванным: данные неполные, сравнивать их с полными нельзя.
+  const left=(S.measure&&S.measure.pos<S.measure.order.length)
+    ||(S.ctrl&&S.ctrl.pos<S.ctrl.order.length)
+    ||(S.duelrun&&S.duelrun.pos<S.duelrun.order.length)
+    ||!!S.four;
+  if(left) markInterrupted();
+  closeOverlay(); stopCountdown(); stopRestBadge();
   if(S._restTimer){clearInterval(S._restTimer);S._restTimer=null;}
   if(S.watch&&S.watch.running){S.watch.running=false;
     if(S.watch.raf)cancelAnimationFrame(S.watch.raf);}
