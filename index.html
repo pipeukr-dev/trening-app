@@ -89,7 +89,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260814-1120-456af41';
+const BUILD = '20260817-1018-8b2e5da';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -559,16 +559,16 @@ E12:{ name:"Ты догоняешь и оттесняешь", type:"duel_goals",
     return ["Он ведёт мяч к воротам, ты догоняешь сзади-сбоку и лезешь плечом.",
     "Он должен пробить, не дав тебе занять позицию.",
     `Строго по очереди: один выполняет — второй отдыхает ${E12_REST_SEC} секунд от своего финиша.`,
-    `${N_TRY(n)} каждому. В конце вводишь, сколько забил из ${n}.`];},
+    `${N_TRY(n)} каждому. После каждого подхода жмёшь ГОЛ, УШЁЛ или НЕ УШЁЛ.`];},
   reps_text:(spec)=>{const n=duelShotsFor("E12",spec||S.spec);
-    return `${N_TRY(n)} каждому, строгое чередование, отдых ${E12_REST_SEC} сек от своего финиша.\nВ конце записывается голов из ${n}.`;},
+    return `${N_TRY(n)} каждому, строгое чередование, отдых ${E12_REST_SEC} сек от своего финиша.\nПосле каждого подхода — ГОЛ, УШЁЛ или НЕ УШЁЛ.`;},
   why:"Смысл — не сбросить тебя силой, а не дать контакту случиться: мяч на дальнюю ногу, сменить угол, уйти раньше.",
   smotri:"Мяч всё время на дальней от тебя ноге. Удар без остановки.",
   oshibka:"Пытается перетолкать корпусом и встаёт. Ведёт мяч на ближней к тебе ноге.",
   pravilno:"Ушёл на полшага раньше, контакт не состоялся.",
   match:"Забрал мяч, побежал, защитник догнал и лезет плечом. Для Даниила при его сложении — главный эпизод.",
   diff:{DANIIL:"Контакт настоящий, идёшь всерьёз.",ADRIAN:"Обозначаешь, без веса."},
-  rec:(spec)=>`Голов из ${duelShotsFor("E12",spec||S.spec)} на каждого.`,
+  rec:(spec)=>`По каждому подходу: гол / ушёл / не ушёл. Всего ${N_TRY(duelShotsFor("E12",spec||S.spec))} на каждого.`,
 },
 E10S:{ name:"Ведение и удар", type:"time_goal",
   setup:()=>`Даниил: старт от центра поля, ведение до линии штрафной, удар.\nДистанция ведения около ${DIST.E10S.DANIIL} м.\nАдриан: старт от линии центрального круга, ведение до линии\nштрафной, удар. Около ${DIST.E10S.ADRIAN} м.\n\nТочка старта и точка удара приблизительные, ±2 м. Жёстких меток нет.`,
@@ -629,8 +629,8 @@ E14:{ name:"Обыгрыш лицом", type:"duel_goals", shots:6,
     mark(150,90,"ТЫ")+lbl(120,110,"отступаешь, закрываешь угол")+arrow(175,88,265,80)),
   steps:(spec)=>["Ты отступаешь и закрываешь угол атаки. Он идёт в обыгрыш и бьёт.",
     "Играешь позиционно, а не силой: руками не держишь, корпусом не толкаешь.",
-    `${N_TRY(duelShotsFor("E14",spec||S.spec))} каждому. В конце вводишь, сколько забил из ${duelShotsFor("E14",spec||S.spec)}.`],
-  reps_text:(spec)=>`${N_TRY(duelShotsFor("E14",spec||S.spec))} каждому. Записывается голов из ${duelShotsFor("E14",spec||S.spec)}.`,
+    `${N_TRY(duelShotsFor("E14",spec||S.spec))} каждому. После каждого подхода жмёшь ГОЛ, ОБЫГРАЛ или НЕ ОБЫГРАЛ.`],
+  reps_text:(spec)=>`${N_TRY(duelShotsFor("E14",spec||S.spec))} каждому, строгое чередование.\nПосле каждого подхода — ГОЛ, ОБЫГРАЛ или НЕ ОБЫГРАЛ.`,
   req:"Обводить в обе стороны. Обыгрыш в одну сторону читается защитником за один эпизод.",
   smotri:"Решение принимается до приёма мяча. Обыгрыш на скорости, а не с места.",
   oshibka:"Останавливается перед защитником и показывает финты. Всегда уходит в одну сторону.",
@@ -638,7 +638,7 @@ E14:{ name:"Обыгрыш лицом", type:"duel_goals", shots:6,
   match:"Выход один на один, обыгрыш последнего защитника. Здесь видно, работает ли остальная подготовка.",
   diff:{DANIIL:"Акцент на смещение внутрь под удар в дальний угол — он играет и вингером.",
         ADRIAN:"Акцент на вход в штрафную с сохранением корпуса."},
-  rec:(spec)=>`Голов из ${duelShotsFor("E14",spec||S.spec)} на каждого.`,
+  rec:(spec)=>`По каждому подходу: гол / обыграл / не обыграл. Всего ${N_TRY(duelShotsFor("E14",spec||S.spec))} на каждого.`,
 },
 E06:{ name:"Челнок 5-10-5", type:"time", stopT:0.30, stance:false,
   setup:()=>`${E06_CONES} фишки в одну линию.\nДаниилу — через ${DIST.E06.DANIIL} м, Адриану — через ${DIST.E06.ADRIAN} м.\nИгрок у средней фишки лицом к тебе (перпендикулярно линии фишек).`,
@@ -979,10 +979,7 @@ function finishExercise(){
   if(S._restTimer){clearInterval(S._restTimer);S._restTimer=null;}
   if(S.watch&&S.watch.running){S.watch.running=false;
     if(S.watch.raf)cancelAnimationFrame(S.watch.raf);}
-  // «Ты догоняешь»: подходы прерваны, но результат ещё не введён — спросим.
-  if(S.duelrun){ const ex=S.duelrun.ex; delete S.duelrun; saveSession();
-    return startDuelGoals(ex); }
-  ["measure","ctrl","four","duelg","shots","e15s"].forEach(k=>{delete S[k];});
+  ["measure","ctrl","duelrun","four","shots","e15s"].forEach(k=>{delete S[k];});
   saveSession(); nextStep();
 }
 // «Что делать» текущего упражнения — оверлеем, без потери прогресса.
@@ -1267,18 +1264,22 @@ function workDuel(st){
     <div class="row"><button class="go" onclick="nextStep()">Готово</button></div>
     ${smallActions()}`);
 }
-// Единоборство с учётом голов: после подходов — ввод по каждому игроку.
-// «Ты догоняешь» (E12) ведётся по подходам: строгое чередование, отдых 90 с
-// от своего финиша — рывок с сопротивлением на 20 м требует восстановления.
-function workDuelGoals(st){
-  const e=EX[st.ex];
-  if(st.ex==="E12") return duelRunStart(st);
-  h(`<h1>${e.name}</h1>
-    <div class="card"><div class="badge">${duelShotsFor(st.ex,S.spec)} подходов каждому</div>
-      <div class="note" style="margin-top:8px">${txt(e.reps_text)}</div></div>
-    <div class="row"><button class="go" onclick="startDuelGoals('${st.ex}')">Ввести результат</button></div>
-    ${smallActions()}`);
-}
+/* Единоборства с учётом голов (E12, E14) ведутся ПО ПОДХОДАМ: строгое
+   чередование, после каждого подхода три кнопки — гол, ушёл (обыграл),
+   не ушёл (не обыграл). Общего ввода голов в конце нет: держать счёт
+   в голове через десять подходов тренер не обязан.
+   Отдых от своего финиша есть только в «Ты догоняешь»: рывок с сопротивлением
+   на 20 м требует восстановления, обыгрыш лицом — нет. */
+const DUEL_WORDS={
+  E12:{ok:"УШЁЛ",no:"НЕ УШЁЛ",lost:"Не ушёл",note:"не ушёл от опеки",
+       hint:"ГОЛ — ушёл от опеки и забил · УШЁЛ — ушёл от опеки, но не забил · "+
+            "НЕ УШЁЛ — не смог уйти, потерял мяч или ты его накрыл."},
+  E14:{ok:"ОБЫГРАЛ",no:"НЕ ОБЫГРАЛ",lost:"Не обыграл",note:"не обыграл",
+       hint:"ГОЛ — обыграл и забил · ОБЫГРАЛ — обыграл, но не забил · "+
+            "НЕ ОБЫГРАЛ — не прошёл защитника."},
+};
+function duelRestFor(ex){ return ex==="E12"?E12_REST_SEC:0; }
+function workDuelGoals(st){ return duelRunStart(st); }
 function duelRunStart(st){
   const N=duelShotsFor(st.ex,S.spec), order=[];
   for(let i=1;i<=N;i++) for(const pl of PLAYERS) order.push({player:pl,no:i});
@@ -1287,28 +1288,35 @@ function duelRunStart(st){
 }
 function duelRunAdvance(){
   const d=S.duelrun;
-  if(d.pos>=d.order.length){        // подходы кончились — вводим голы
-    const ex=d.ex; delete S.duelrun; saveSession(); return startDuelGoals(ex);
+  if(d.pos>=d.order.length){        // всё записано по ходу — ввода не нужно
+    delete S.duelrun; saveSession(); return nextStep();
   }
   const cur=d.order[d.pos];
   return (d.readyAt[cur.player]-Date.now()>0)?duelRunRest(cur):duelRunRep(cur);
 }
 function duelRunRep(cur){
   const d=S.duelrun, other=cur.player==="DANIIL"?"ADRIAN":"DANIIL";
+  const w=DUEL_WORDS[d.ex], rest=duelRestFor(d.ex);
   const done=d.order.slice(0,d.pos).filter(o=>o.player===cur.player).length;
   h(`${countHeader(cur.player,EX[d.ex].name,d.N,"подходов",done)}
     <div class="title">${RU[cur.player]} · подход ${cur.no} из ${d.N}</div>
-    <div class="note">Второй в это время отдыхает. Отдых ${E12_REST_SEC} секунд
-    от своего финиша — приложение следит.</div>
-    <div class="row"><button class="go" onclick="duelRunDone()">Выполнил</button></div>
+    <div class="note">Второй в это время отдыхает.${rest?` Отдых ${rest} секунд
+    от своего финиша — приложение следит.`:""}</div>
+    <div class="row"><button class="go" onclick="duelRunDone('goal')">⚽ ГОЛ</button></div>
+    <div class="row"><button onclick="duelRunDone('pass')">✓ ${w.ok}</button>
+      <button class="warn" onclick="duelRunDone('lost')">✕ ${w.no}</button></div>
+    <div class="note">${w.hint}</div>
     ${otherRestHtml()}
     ${smallActions()}`);
   if(d.readyAt[other]>Date.now()) restBadge("rest-other",other,d.readyAt[other]);
   else stopRestBadge();
 }
-function duelRunDone(){
-  const d=S.duelrun, cur=d.order[d.pos];
-  d.readyAt[cur.player]=Date.now()+E12_REST_SEC*1000;
+function duelRunDone(kind){
+  const d=S.duelrun, cur=d.order[d.pos], w=DUEL_WORDS[d.ex];
+  pushAttempt({player:cur.player,ex:d.ex,attempt_no:cur.no,shots:1,
+    goals:kind==="goal"?1:0,lost:kind==="lost",
+    note:kind==="lost"?w.note:""});
+  d.readyAt[cur.player]=Date.now()+duelRestFor(d.ex)*1000;
   d.pos++; saveSession(); duelRunAdvance();
 }
 function duelRunRest(cur){
@@ -1324,21 +1332,6 @@ function duelRunRest(cur){
 }
 function duelRunSkipRest(){ stopCountdown();
   const d=S.duelrun; d.readyAt[d.order[d.pos].player]=Date.now(); duelRunAdvance(); }
-function startDuelGoals(ex){
-  S.duelg={ex,shots:duelShotsFor(ex,S.spec),player:"DANIIL"}; duelgRender();
-}
-function duelgRender(){
-  const d=S.duelg;
-  h(`${countHeader(d.player,EX[d.ex].name,d.shots,"подходов")}
-    <div class="title">Сколько забил из ${d.shots}?</div>
-    <div class="gridN">${Array.from({length:d.shots+1},(_,i)=>`<button onclick="duelgSave(${i})">${i}</button>`).join("")}</div>
-    ${smallActions()}`);
-}
-function duelgSave(g){const d=S.duelg;
-  pushAttempt({player:d.player,ex:d.ex,goals:g,shots:d.shots});
-  if(d.player==="DANIIL"){d.player="ADRIAN";return duelgRender();}
-  delete S.duelg; nextStep();
-}
 
 /* ---- Измеряемые упражнения (time / time_goal / breakaway) ---- */
 function startMeasure(st,part){
@@ -1925,13 +1918,19 @@ function pctRecordLines(g,s,record){
   return ["",`${NEW_RECORD} Прежний ${prev}%, улучшение ${nOf(pct-prev,"пункт","пункта","пунктов")}`,""];
 }
 // Упражнения, где потеря мяча — результат попытки, а не брак замера:
-// в «Приёме под опекой» она входит в знаменатель (dupl. bot/rules.py).
-const LOST_IS_RESULT=new Set(["E13"]);
+// в единоборствах не ушёл и не обыграл — это неудачная попытка, она входит
+// в знаменатель, иначе «4 из 5» превратилось бы в «4 из 4» (dupl. bot/rules.py).
+const LOST_IS_RESULT=new Set(["E13","E12","E14"]);
+// Контроль мяча считается по потерям только там, где он вообще выводится.
+const CONTROL_FROM_LOSSES=new Set(["E13"]);
+// Как называется неудачная попытка в строке итога (dupl. bot/insights.py).
+const LOST_LABEL={E12:"Не ушёл",E14:"Не обыграл"};
+function lostLabel(ex){ return LOST_LABEL[ex]||"Потерь мяча"; }
 // Контроль мяча: записанная оценка (старые записи) или расчёт по потерям.
 function controlOf(ex,list){
   const c=list.filter(a=>a.control!==null&&a.control!==undefined).map(a=>a.control);
   if(c.length) return +(c.reduce((x,y)=>x+y,0)/c.length).toFixed(1);
-  if(!LOST_IS_RESULT.has(ex)||!list.length) return null;
+  if(!CONTROL_FROM_LOSSES.has(ex)||!list.length) return null;
   const lost=list.filter(a=>a.lost).length;
   return Math.round(1+4*(list.length-lost)/list.length);
 }
@@ -2076,7 +2075,7 @@ function summaryChunks(pl){
       scores.push(line);
       pctRecordLines(t.g,t.s,pctRec).forEach(x=>scores.push(x));
       const lost=list.filter(a=>a.lost).length;
-      if(lost>0)scores.push(`Потерь мяча: ${lost}`); }
+      if(lost>0)scores.push(`${lostLabel(ex)}: ${lost}`); }
   }
   flush();
   return chunks;
@@ -2250,7 +2249,6 @@ function resumeStep(){
       return measureAdvance();
     if(S.ctrl&&S.ctrl.ex===st.ex) return ctrlAdvance();
     if(S.duelrun&&S.duelrun.ex===st.ex) return duelRunAdvance();
-    if(S.duelg&&S.duelg.ex===st.ex) return duelgRender();
     if(S.shots&&S.shots.ex===st.ex) return shotsRender();
     if(S.four&&st.ex==="E10") return fourEnter();
   }
