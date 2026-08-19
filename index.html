@@ -89,7 +89,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260818-1101-ab76711';
+const BUILD = '20260819-1410-4751762';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -136,12 +136,19 @@ const DIST={
   E13:{DANIIL:17,ADRIAN:17},
   E14:{DANIIL:20,ADRIAN:20},
   E15:{DANIIL:36,ADRIAN:27},
+  E17:{DANIIL:10,ADRIAN:10},
   E08_D:{DANIIL:34}, E08_A:{ADRIAN:27},
 };
 // Замер внутри длинного забега (E02): бежит 35 — меряем средние 25.
 const E02_MEASURE={"25m_fly":25,"30m_fly":30};
 // Разметка, не совпадающая с дистанцией замера.
 const E01_LANE_GAP=3;        // между коридорами братьев
+/* «Прыжки и старт» (E17): прыжков подряд по игроку — у младшего их меньше,
+   иначе к старту он приходит выключенным (dupl. bot/catalog.E17_JUMPS). */
+const E17_JUMPS={DANIIL:3,ADRIAN:2};
+const E17_WATCH_RULE="Пуск — старт после последнего прыжка. Стоп — 10 метров. Сами прыжки в замер не входят.";
+// Ограничение выводится на экран упражнения (dupl. bot/catalog.E17_WARNING).
+const E17_WARNING="Прыжки подряд — ударная нагрузка на пятку. При боли в пятке упражнение пропускать. После перерыва начинать с одного прыжка.";
 const E04_CONES=8, E04_CONE_GAP=2;
 const E05_CONES=5, E05_SIDE={DANIIL:3,ADRIAN:2.5};
 const E06_CONES=3;
@@ -166,7 +173,8 @@ const REST={
   E06:75,
   E10S:100,
   E08:90,
-  E15:{fresh:90,tired:90},
+  E15:90,
+  E17:45,
 };
 function restOf(ex,key){ const r=REST[ex];
   return (r&&typeof r==="object")?r[key]:r; }
@@ -200,14 +208,13 @@ function runCount(ex,variant,spec){
   return out;
 }
 function repsOf(ex,player,spec){
-  const plan=(ex==="E15")?e15Slots(E15_FRESH):repsFor(ex,spec);
-  return (plan[player]||[]).length;
+  return (repsFor(ex,spec)[player]||[]).length;
 }
 // Каноническое число повторов на игрока (dupl. bot/catalog.py REP_COUNTS).
-// E15 — часть 1 (5 обоим) плюс часть 2 (Даниил 3).
+// E15 — три забега обоим (деления на части нет с 19.08).
 const REPS={E01:{DANIIL:6,ADRIAN:5},E02:{DANIIL:6,ADRIAN:5},E04:{DANIIL:6,ADRIAN:6},
   E05:{DANIIL:6,ADRIAN:6},E06:{DANIIL:5,ADRIAN:5},E07:{DANIIL:10,ADRIAN:10},
-  E10S:{DANIIL:6,ADRIAN:6},E15:{DANIIL:8,ADRIAN:5},
+  E10S:{DANIIL:6,ADRIAN:6},E15:{DANIIL:3,ADRIAN:3},E17:{DANIIL:3,ADRIAN:3},
   E08_D:{DANIIL:5},E08_A:{ADRIAN:5}};
 
 /* ── ОБЛЕГЧЁННЫЙ РЕЖИМ (dupl. bot/catalog.py) ──────────────────────────
@@ -216,7 +223,10 @@ const REPS={E01:{DANIIL:6,ADRIAN:5},E02:{DANIIL:6,ADRIAN:5},E04:{DANIIL:6,ADRIAN
    упражнение у этого игрока убрано целиком.
    В контрольные дни режим недоступен: замер с сокращённого числа попыток
    несравним с базой, а контрольных дней всего три. */
-const LIGHT_REPS={E01:3,E02:0,E04:2,E05:2,E06:3,E07:4,E10S:2,E15:3};
+// Значение — число повторов; словарь по игроку там, где объём режется
+// по-разному («Прыжки и старт»: у младшего прыжков и так меньше).
+const LIGHT_REPS={E01:3,E02:0,E04:2,E05:2,E06:3,E07:4,E10S:2,E15:2,
+  E17:{DANIIL:2,ADRIAN:1}};
 const LIGHT_RECEPTIONS=2;    // «Приём под опекой» во все дни
 const LIGHT_DUEL_SHOTS=2;    // «Ты догоняешь» и «Обыгрыш лицом»
 const LIGHT_SUB_SHOTS=3;     // подсерия «Ударов» вместо пяти
@@ -232,13 +242,14 @@ function lightTag(pl){ return isLight(pl)?" · облегчённый":""; }
 // Единицы объёма упражнения — для строки «Даниил: 2 прохода (облегчённый)».
 const EX_UNIT={E01:N_RUN,E02:N_RUN,E04:N_PASS,E05:N_PASS,E06:N_REP,E10S:N_REP,
   E07:N_CATCH,E10:(n)=>nOf(n,"удар","удара","ударов"),E12:N_TRY,E14:N_TRY,
-  E13:N_CATCH,E15:N_REP,E08:N_ATT};
-// «Отрыв» (E15): два режима подряд. Часть 2 — без стоп-правила.
-const E15_FRESH="fresh", E15_TIRED="tired";
-// Часть 2 Адриана: 10 ударов С МЕСТА (мяч лежит, ведения нет) с ближней
-// дистанции, учёт одним числом из 10 (dupl. bot/catalog.py).
-const E15_SHOTS_A={v:"tired_shots",name:"Удары с места",kind:"ближняя",
-  shots:10,dist:13,range:"11-14 м"};
+  E13:N_CATCH,E15:N_REP,E08:N_ATT,E17:N_TRY};
+/* «Отрыв» (E15): три забега подряд, деления на части нет с 19.08. Часть 1
+   (пять забегов на лучшее время) убрана — такое же ведение с ударом уже
+   есть во вторник в «Ведении и ударе». Остались забеги, по которым
+   считается дельта 1-3; идут сразу, первый на свежих ногах. Стоп-правила
+   нет: падение времени здесь и есть измеряемая величина.
+   (dupl. bot/catalog.py E15_REPS / E15_REST_SEC) */
+const E15_REPS=3;
 // Секундомер «Отрыва»: пуск — СТАРТ ИГРОКА, стоп — удар (dupl. bot/catalog.py).
 // В замер входит весь рывок: реакция на пас, догон мяча, приём, ведение, удар.
 // Замеры ДО 2026-08-07 мерили другой отрезок (от касания мяча) и с новыми
@@ -314,10 +325,14 @@ function hhmmss(dt){ return hhmm(dt)+":"+String(dt.getSeconds()).padStart(2,"0")
 /* ================================================================
    КАЛЕНДАРЬ (зеркалит bot/schedule.py)
    ================================================================ */
-const P1_START="2026-08-03", P1_END="2026-08-19";
-const P2_START="2026-08-20", P2_END="2026-09-10";
+/* Программа ОДНА — та, что раньше называлась Фазой 1. Занятия идут все пять
+   дней недели, нагрузку регулирует облегчённый режим (выбирается вручную и
+   отдельно каждому игроку). Фазы 2 (короткие занятия типов S/B/D с выбором
+   по расписанию клуба и матчей) больше нет: у братьев разное расписание
+   клуба, и один день не может быть Фазой 2 для одного и Фазой 1 для
+   другого. Вместе с ней убран особый день подводки 19 августа. */
+const PROGRAM_START="2026-08-03", PROGRAM_END="2026-09-10";
 const CONTROL_DAYS={"2026-08-03":1,"2026-08-14":2,"2026-09-09":3};
-const TAPER_SHORT="2026-08-19", TAPER_WEEK_START="2026-08-17";
 const WD=["MON","TUE","WED","THU","FRI","SAT","SUN"];
 const WD_RU=["понедельник","вторник","среда","четверг","пятница","суббота","воскресенье"];
 // Разминка/заминка/пауза (минут) — каркас. Длительность дня вычисляется:
@@ -327,9 +342,9 @@ const WD_RU=["понедельник","вторник","среда","четве�
    пяти минут он не бывает (dupl. bot/schedule.LIGHT_BLOCK_MIN). Ноль —
    упражнение в облегчённом не идёт, под правило не попадает. */
 const LIGHT_BLOCK_MIN=5;
-const WARMUP_MIN={1:15,2:12}, COOLDOWN_MIN={1:5,2:4}, PAUSE_MIN=1;
-function sessionMinutes(phase,blocks){
-  return WARMUP_MIN[phase]+blocks.reduce((a,b)=>a+b[1],0)+blocks.length*PAUSE_MIN+COOLDOWN_MIN[phase];
+const WARMUP_MIN=15, COOLDOWN_MIN=5, PAUSE_MIN=1;
+function sessionMinutes(blocks){
+  return WARMUP_MIN+blocks.reduce((a,b)=>a+b[1],0)+blocks.length*PAUSE_MIN+COOLDOWN_MIN;
 }
 /* Длительность занятия по фактическим режимам игроков: её задаёт тот, у кого
    объём больше, поэтому облегчённый у ОДНОГО день не укорачивает. Блоки
@@ -338,103 +353,65 @@ function sessionMinutes(phase,blocks){
 function sessionMinutesNow(spec){
   if(!PLAYERS.every(pl=>isLight(pl))) return spec.minutes;
   const kept=spec.blocks.filter(b=>b[2]>0).map(b=>[b[0],b[2]]);
-  return kept.length?sessionMinutes(spec.phase,kept):0;
+  return kept.length?sessionMinutes(kept):0;
 }
-// Матрица Фазы 1: [цель, [[код, минут-блока]...]] (минуты дня — из sessionMinutes)
+// Матрица дня: [цель, [[код, минут-блока, минут в облегчённом]...]]
+// (минуты дня — из sessionMinutes, dupl. bot/schedule.DAY_MATRIX).
 // Минуты E13 учитывают отдых 1 мин между приёмами (см. bot/schedule.py).
-// Пересчёт от 17.08: «Старты» −3 мин (отдых 45), «Разгон» −2, «Отрыв» −2,
-// «Ведение и удар» −2 (отдых 100, но повторов 6 вместо 10 — беговое, см.
-// catalog.RUN_REP_MAX). Отдых «Обыгрыша лицом» 0 → 40 (18.08): блок 14 → 15.
-// ПН 77, ВТ 79, СР 86, ЧТ 97, ПТ 92
-// (dupl. bot/schedule.py).
-const P1_MATRIX={
-  MON:["Скорость и первый шаг",[["E01",11,8],["E02",13,0],["E13",16,10],["E12",13,7]]],
+// Правки 19.08: «Прыжки и старт» — новый первый блок ПН (6 мин, 77 → 84);
+// «Отрыв» без части 1 — 36 → 10; «Ты догоняешь» добавлен в ПТ на 4 подхода
+// (11 мин), пятница 92 → 78.
+// ПН 84, ВТ 79, СР 86, ЧТ 97, ПТ 78
+const DAY_MATRIX={
+  MON:["Скорость и первый шаг",[["E17",6,5],["E01",11,8],["E02",13,0],["E13",16,10],["E12",13,7]]],
   TUE:["Дриблинг и быстрые ноги",[["E04",15,9],["E05",15,9],["E14",15,10],["E10S",10,5]]],
   WED:["Смена направления",[["E06",12,9],["E13",19,13],["E14",15,10],["E12",16,10]]],
   THU:["Контроль и завершение",[["E07",19,13],["E10",45,18],["E13",10,7]]],
-  FRI:["Отрыв и завершение",[["E15",36,25],["E14",15,10],["E13",18,13]]],
+  FRI:["Отрыв и завершение",[["E15",10,7],["E12",11,7],["E14",15,10],["E13",18,13]]],
 };
-// Фаза 2 — два блока, короткое занятие (dupl. bot/schedule.py):
-// Скорость 32, Мяч 37, Единоборство 34 минуты.
-const P2_TYPES={
-  S:["Скорость",[["E01",8,7],["E02",6,0]]],
-  B:["Мяч",[["E04",10,7],["E10S",9,5]]],
-  D:["Единоборство",[["E13",9,6],["E12",7,5]]],
-};
+// Контрольный день: состав не меняется, облегчённого режима в нём нет.
+const CONTROL_BLOCKS=[["E01",9,9],["E02",10,10],["E08",13,13]];
 function isoToDate(s){const[y,m,d]=s.split("-").map(Number);return new Date(y,m-1,d);}
 function dateToIso(dt){return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");}
 function addDays(iso,n){const dt=isoToDate(iso);dt.setDate(dt.getDate()+n);return dateToIso(dt);}
 function wdOf(iso){return (isoToDate(iso).getDay()+6)%7;}
-function weekOfP1(iso){return Math.floor((isoToDate(iso)-isoToDate(P1_START))/86400000/7)+1;}
-function ctx(){const raw=localStorage.getItem("trening_ctx");
-  const o=raw?JSON.parse(raw):{club_days:[],match_days:[]};
-  return {club:new Set(o.club_days||[]),match:new Set(o.match_days||[])};}
-function rule5(iso,c){
-  if(c.club.has(iso)||c.match.has(iso))return false;
-  if(c.match.has(addDays(iso,1)))return false;
-  if(c.match.has(addDays(iso,-1)))return false;
-  if(c.club.has(addDays(iso,-1))&&c.club.has(addDays(iso,-2)))return false;
-  return true;}
-function phase2Type(iso,c){
-  let alt=0,cur=P2_START; while(cur<iso){if(rule5(cur,c))alt++;cur=addDays(cur,1);}
-  if(c.club.has(iso))return[null,"Сегодня клубная тренировка. Утреннего занятия нет."];
-  if(c.match.has(iso))return[null,"Сегодня матч. Занятия нет."];
-  if(c.match.has(addDays(iso,1)))return[null,"Завтра матч. Занятия нет."];
-  if(c.match.has(addDays(iso,-1)))return["B","Вчера был матч — тип Мяч."];
-  if(c.club.has(addDays(iso,-1))&&c.club.has(addDays(iso,-2)))return["B","Два клубных дня подряд — тип Мяч."];
-  return[(alt%2===0)?"S":"D","Чередование скорость/единоборство."];
-}
-function noDay(iso,phase,reason){return {iso,phase,week:null,code:WD[wdOf(iso)],day_code:"",
-  goal:"",minutes:0,has:false,control:false,type:null,blocks:[],shortened:false,reason};}
+function weekOf(iso){return Math.floor((isoToDate(iso)-isoToDate(PROGRAM_START))/86400000/7)+1;}
+function noDay(iso,reason){return {iso,week:null,code:WD[wdOf(iso)],day_code:"",
+  goal:"",minutes:0,has:false,control:false,blocks:[],reason};}
 function determineDay(iso){
   const wd=wdOf(iso),code=WD[wd];
   if(CONTROL_DAYS[iso]!==undefined){
-    // Контрольный день: облегчённого режима нет, третье число то же.
-    const ph=iso<=P1_END?1:2, blocks=[["E01",9,9],["E02",10,10],["E08",13,13]];
-    return {iso,phase:ph,week:iso<=P1_END?weekOfP1(iso):null,code,
+    const blocks=CONTROL_BLOCKS.map(b=>b.slice());
+    return {iso,week:weekOf(iso),code,
       day_code:"CTRL_"+CONTROL_DAYS[iso],goal:"Контрольный замер",
-      minutes:sessionMinutes(ph,blocks),has:true,
-      control:true,type:null,blocks,shortened:false,
+      minutes:sessionMinutes(blocks),has:true,control:true,blocks,
       reason:"Контрольный день: тест, не тренировка."};
   }
-  if(iso>=P1_START&&iso<=P1_END){
-    if(!P1_MATRIX[code])return noDay(iso,1,"Выходной. В Фазе 1 занятия только Пн-Пт.");
-    const w=weekOfP1(iso),[goal,blocks]=P1_MATRIX[code];
-    if(iso===TAPER_SHORT){const tb=[["E01",7,5],["E10S",6,5]];
-      return {iso,phase:1,week:w,code,day_code:"P1_W"+w+"_"+code,
-      goal:"Подводка: старты + удары",minutes:sessionMinutes(1,tb),has:true,control:false,type:null,
-      blocks:tb,shortened:true,reason:"Подводка перед Фазой 2."};}
-    const short=iso>=TAPER_WEEK_START, bl=blocks.map(b=>b.slice());
-    return {iso,phase:1,week:w,code,day_code:"P1_W"+w+"_"+code,goal,minutes:sessionMinutes(1,bl),has:true,
-      control:false,type:null,blocks:bl,shortened:short,
-      reason:short?"Подводка: объём -50%.":""};
-  }
-  if(iso>=P2_START&&iso<=P2_END){
-    const c=ctx(),[t,reason]=phase2Type(iso,c);
-    if(!t)return noDay(iso,2,reason);
-    const[name,blocks]=P2_TYPES[t], bl=blocks.map(b=>b.slice());
-    return {iso,phase:2,week:null,code,day_code:"P2_"+t,goal:name,minutes:sessionMinutes(2,bl),has:true,
-      control:false,type:t,blocks:bl,shortened:false,reason};
-  }
-  return noDay(iso,null,"Дата вне программы лагеря.");
+  if(iso<PROGRAM_START||iso>PROGRAM_END)return noDay(iso,"Дата вне программы лагеря.");
+  if(!DAY_MATRIX[code])return noDay(iso,"Выходной. Занятия только Пн-Пт.");
+  const w=weekOf(iso),[goal,blocks]=DAY_MATRIX[code];
+  return {iso,week:w,code,day_code:"W"+w+"_"+code,goal,
+    minutes:sessionMinutes(blocks),has:true,control:false,
+    blocks:blocks.map(b=>b.slice()),reason:""};
 }
 // Число приёмов E13 по дню (контроль под опекой).
 // Среда 8 → 6 (17.08): правило максимума шести повторов действует на всё,
 // кроме чистых ударов (dupl. bot/catalog.E13_RECEPTIONS).
 function e13N(code){return {MON:6,WED:6,THU:4,FRI:5}[code]||5;}
-// Фаза-зависимые счётчики: в Фазе 2 объём срезан.
-// Фаза 2 — вдвое меньший объём при том же отдыхе (dupl. bot/catalog.py).
 // Второй аргумент player — облегчённый режим этого игрока; без него
 // возвращается обычное число (для текстов, где игрок не назван).
-const P2_RECEPTIONS=4, P2_DUEL_SHOTS=3;
 function receptionsFor(spec,player){
   if(player&&isLight(player))return LIGHT_RECEPTIONS;
-  return spec.phase===2?P2_RECEPTIONS:e13N(spec.code);}
-// «Ведение и удар» — 6 повторов в обеих фазах (dupl. bot/catalog.py).
+  return e13N(spec.code);}
+// «Ведение и удар» — 6 повторов во все дни (dupl. bot/catalog.py).
 function e10sReps(spec){return REPS.E10S.DANIIL;}
+/* «Ты догоняешь» в пятницу короче: он там четвёртым блоком после «Отрыва»
+   (4 подхода, dupl. bot/catalog.E12_SHOTS_FRI). */
+const E12_SHOTS_FRI=4;
 function duelShotsFor(ex,spec,player){
   if(player&&isLight(player))return LIGHT_DUEL_SHOTS;
-  return (ex==="E12"&&spec.phase===2)?P2_DUEL_SHOTS:EX[ex].shots;}
+  if(ex==="E12"&&spec&&spec.code==="FRI")return E12_SHOTS_FRI;
+  return EX[ex].shots;}
 // Число ударов подсерии «Ударов» и приёмов подсерии «Разворота» — по игроку.
 function e10SubShots(sub,player){return isLight(player)?LIGHT_SUB_SHOTS:sub.shots;}
 function e07Shots(player){return isLight(player)?LIGHT_REPS.E07/E07_SUBS.length
@@ -447,10 +424,6 @@ function plannedReps(ex,spec,pl){
   if(ex==="E07")return e07Shots(pl)*E07_SUBS.length;
   if(ex==="E10")return isLight(pl)
     ? LIGHT_SUB_SHOTS*e10subs(1).length*LIGHT_E10_SERIES : e10Total();
-  // «Отрыв» — только сами рывки: удары Адриана с места идут отдельным
-  // блоком внутри упражнения и в счёт повторов не входят.
-  if(ex==="E15")return e15Slots(E15_FRESH)[pl].length
-    +e15Slots(E15_TIRED)[pl].length;
   const plan=repsFor(ex,spec);
   return (plan[pl]||[]).length;
 }
@@ -476,6 +449,7 @@ function e02Biweekly(iso){const diff=Math.round((isoToDate(iso)-isoToDate("2026-
 /* Разметка дня. Числа берутся из тех же таблиц, что и слоты: словами
    в тексте они не повторяются. */
 const MARKUP_SNIPPET = {
+  E17:(spec)=>`${N_TRY(repsOf("E17","DANIIL",spec))} каждому по ${E17_JUMPS.DANIIL}/${E17_JUMPS.ADRIAN} прыжка.\nТот же коридор ${DIST.E17.DANIIL} м, что у «Стартов» — фишки ставятся один раз.\nЗамер только бега после последнего прыжка, отдых ${REST.E17} сек.`,
   E01:()=>`Даниил: 2 фишки на ${DIST.E01.DANIIL} м — его коридор.\nАдриан: рядом в ${E01_LANE_GAP} м, 2 фишки на ${DIST.E01.ADRIAN} м.\nСтарты по очереди, ты на общем финише.`,
   E02:()=>{const fly=DIST.E02["25m_fly"], run=fly-E02_MEASURE["25m_fly"];
     return `Даниил, одна дорожка: фишки 0 и ${DIST.E02["20m"]} м — забеги с места; фишки ${run} и ${fly} м — длинные (пуск на ${run} м, стоп на ${fly} м).\nАдриан: фишки 0, ${DIST.E02["15m"]} и ${DIST.E02["20m"]} м.\nТы на финише.`;},
@@ -492,12 +466,12 @@ const MARKUP_SNIPPET = {
   E12:(spec)=>`${N_TRY(duelShotsFor("E12",spec))} каждому. Игрок с мячом в ${DIST.E12.DANIIL} м от ворот.\nТы в двух метрах позади и сбоку. Отдых ${E12_REST_SEC} сек от своего финиша.`,
   E13:()=>`Игрок спиной к воротам, в ${E13_BACK} м от них.\nПасующий в ${E13_PASS} м перед ним, лицом к воротам.\nТы за спиной принимающего.`,
   E14:(spec)=>`${N_TRY(duelShotsFor("E14",spec))} каждому. Игрок с мячом в ${DIST.E14.DANIIL} м от ворот.\nТы между ним и воротами, в ${E14_GAP} м от него. Отдых ${E14_REST_SEC} сек от своего финиша.`,
-  E15:()=>`Даниил: от центра поля, ведение ~${DIST.E15.DANIIL} м, команда на ${E15_CALL.DANIIL}-м метре.\nАдриан: от линии центрального круга, ~${DIST.E15.ADRIAN} м, команда на ${E15_CALL.ADRIAN}-м.\nТы на своей половине ЗА СПИНОЙ игрока, с мячом. Ворота.\nСекундомер: пуск — старт игрока, стоп — удар (весь рывок).\nЧасть 2 Адриана: ${E15_SHOTS_A.shots} ударов с места с ${E15_SHOTS_A.range}.`,
+  E15:(spec)=>`${N_REP(repsOf("E15","DANIIL",spec))} каждому, отдых ${REST.E15} сек.\nДаниил: от центра поля, ведение ~${DIST.E15.DANIIL} м, команда на ${E15_CALL.DANIIL}-м метре.\nАдриан: от линии центрального круга, ~${DIST.E15.ADRIAN} м, команда на ${E15_CALL.ADRIAN}-м.\nТы на своей половине ЗА СПИНОЙ игрока, с мячом. Ворота.\nСекундомер: пуск — старт игрока, стоп — удар (весь рывок).`,
   E08:()=>`Даниил: от центра поля ${DIST.E08_D.DANIIL} м. Адриан: ${DIST.E08_A.ADRIAN} м. Ты у ворот.`,
 };
-// SVG-схема дня — коридоры для ПН и ПТ Фазы 1 (если есть).
+// SVG-схема дня — коридоры для ПН и ПТ (если есть).
 function markupSvg(spec){
-  if(spec.phase!==1 || spec.control) return "";
+  if(spec.control) return "";
   // ПН — два стартовых коридора рядом, тренер на общем финише.
   if(spec.code==="MON"){
     const k=mScale(DIST.E01.DANIIL,190), x0=30, x1=x0+DIST.E01.DANIIL*k;
@@ -548,19 +522,18 @@ const WU={
   dyn3:{t:"Динамическая в движении",min:3,body:"По 20 м, обратно шагом:\n• Высокое бедро • Захлёст голени • Выпады с поворотом\n• Приставной обоими боками • «Открой калитку» • Носки/пятки"},
   acc:{t:"Ускорения",min:3,body:"4 отрезка по 20 м: 60%, 70%, 80%, 90%.\nОбратно шагом."},
   ball:{t:"Мяч",min:2,body:"Перепасовка братьев в движении, 10 м между ними."},
-  jump:{t:"Прыжки в длину с места",min:1,body:"3 прыжка каждому, 30 секунд.\nНе тренировка — взбадривание нервной системы\nперед скоростным блоком."},
   ladder:{t:"Координационная лестница",min:4,body:"4 варианта по 60 сек, после каждого ускорение 15 м:\n• два шага в ячейку • один шаг, максимально часто\n• боком приставным • внутрь-наружу\nДаниилу хватит 2-3 вариантов, Адриану все четыре."},
 };
+/* Прыжки из разминки понедельника убраны 19.08: они стали упражнением
+   «Прыжки и старт» (E17) с замером времени и стоят первым блоком дня.
+   Понедельник поэтому идёт с общей разминкой — те же 15 минут. */
 function warmupSteps(spec){
-  const code=spec.code, phase=spec.phase;
-  if(phase===2) // сокращённая разминка Фазы 2, без блока с мячом = 12 мин
-    return [WU.leg,WU.joints3,WU.dyn3,WU.acc];       // 3+3+3+3 = 12
-  if(code==="MON") return [WU.leg,WU.joints3,WU.dyn3,WU.acc,WU.ball,WU.jump]; // 3+3+3+3+2+1 = 15
+  const code=spec.code;
   if(code==="TUE") return [WU.leg,WU.joints2,WU.dyn3,WU.acc,WU.ladder];       // 3+2+3+3+4 = 15
   return [WU.leg,WU.joints3,WU.dyn4,WU.acc,WU.ball];                          // 3+3+4+3+2 = 15
 }
 function cooldownStep(spec){
-  const min=spec.phase===2?4:5;
+  const min=COOLDOWN_MIN;
   return {t:"Заминка",min,body:
     (spec.code==="FRI"?"Лёгкий бег 3 минуты.":"Лёгкий бег 2 минуты.")+
     "\nРастяжка по 20 сек: задняя поверхность бедра,\nикры, пах, квадрицепс."};
@@ -635,6 +608,39 @@ const STANCE="Стартовая стойка футбольная: ноги ч�
   "впереди. Тело в напряжении. НЕ стойка бегуна с опорой на руки.";
 
 const EX = {
+/* «Прыжки и старт» (E17) — до 19.08 это была вставка в разминку понедельника
+   (3 прыжка, 30 секунд, без замера). Стало упражнением с секундомером:
+   мерится не прыжок, а переход от отталкивания к горизонтальному разгону.
+   Полного отдыха перед первой попыткой тут нет: упражнение идёт первым
+   блоком, сразу после ускорений разминки, а свой полный отдых «Старты»
+   держат следующим блоком. */
+E17:{ name:"Прыжки и старт", type:"time", stopT:0.15, jumps:true,
+  setup:()=>`2 фишки, ${DIST.E17.DANIIL} м между ними — тот же коридор, что у «Стартов».\nПрыжки — от стартовой фишки, старт с места приземления последнего прыжка.\nТы на финише с секундомером.`,
+  svg:()=>{const k=mScale(DIST.E17.DANIIL,130), x0=100, x1=x0+DIST.E17.DANIIL*k;
+    return svg(
+      cone(x0,62)+cone(x1,62)+
+      arrow(30,62,x0-8,62)+lblC(62,46,E17_JUMPS.DANIIL+" прыжка")+
+      arrow(x0+10,62,x1-12,62)+dim(x0,88,x1,DIST.E17.DANIIL+" м")+
+      lblC(x0,120,"пуск секундомера")+
+      coach(x1+34,62,"ТЫ · стоп")+
+      lblC(150,150,"прыжки в замер не входят"));},
+  steps:()=>[`Даниил: ${E17_JUMPS.DANIIL} прыжка в длину с места подряд, Адриан: ${E17_JUMPS.ADRIAN}.`,
+    `Сразу после последнего прыжка — старт и ${DIST.E17.DANIIL} метров бегом через финиш.`,
+    "СЕКУНДОМЕР: пуск в момент старта после последнего прыжка, стоп на 10 метрах. Сами прыжки в замер НЕ входят.",
+    `${N_TRY(REPS.E17.DANIIL)} каждому, отдых ${REST.E17} секунд — приложение следит.`,
+    `Дистанция та же, что в «Стартах с 10 метров», — результаты сравнимы между упражнениями.`],
+  reps_text:(spec)=>PLAYERS.map(pl=>`${RU[pl]}: ${N_TRY(repsOf("E17",pl,spec||S.spec))} по ${E17_JUMPS[pl]} ${plural(E17_JUMPS[pl],"прыжку","прыжка","прыжков")}.`).join("\n")
+    +`\nОтдых ${REST.E17} сек. Замер — только ${DIST.E17.DANIIL} м после последнего прыжка.`,
+  watchNote:E17_WATCH_RULE,
+  req:E17_WARNING,
+  smotri:"Приземление последнего прыжка сразу переходит в шаг вперёд, без паузы и без подсядки.",
+  oshibka:"Замирает после приземления, выравнивается и только потом бежит — это и есть потерянная десятая.",
+  pravilno:"Между приземлением и первым беговым шагом нет остановки.",
+  match:"Отскок мяча: оттолкнулся и сразу побежал. Замер показывает, насколько быстро переключается.",
+  diff:{DANIIL:`${E17_JUMPS.DANIIL} прыжка подряд.`,
+        ADRIAN:`${E17_JUMPS.ADRIAN} прыжка: в 10 лет третий прыжок уже отнимает старт.`},
+  rec:"Записывается время каждого подхода (только бег, без прыжков).",
+},
 E01:{ name:"Старты с 10 метров", type:"time", stopT:0.15, firstRest:true, stance:true,
   setup:()=>`Даниил: 2 фишки, ${DIST.E01.DANIIL} м между ними — его коридор.\nАдриан: рядом, в ${E01_LANE_GAP} м вбок, ещё 2 фишки на ${DIST.E01.ADRIAN} м.\nТы на общем финише с секундомером, весь день не двигаешься.`,
   firstRestText:`Перед первым забегом — ${FULL_REST_SEC} секунд полного отдыха.\nНе сразу после разминки. 3 августа во всех сериях лучшее время пришлось на первую попытку.`,
@@ -943,25 +949,23 @@ E15:{ name:"Отрыв", type:"breakaway", stopT:0.50,
       arrow(x0+12,80,xGoal-8,80)+
       cone(xCall,80)+lblC(xCall,60,"команда "+E15_CALL.DANIIL+" м")+
       dim(x0,150,xGoal,"ведение ~"+DIST.E15.DANIIL+" м"));},
-  steps:(spec)=>{const f=e15Slots(E15_FRESH), t=e15Slots(E15_TIRED), a=E15_SHOTS_A;
+  steps:(spec)=>{const n=repsOf("E15","DANIIL",spec||S.spec);
     return ["Ты за спиной игрока с мячом, даёшь пас на ход вперёд.",
     "Игрок стартует, забирает мяч на скорости не останавливаясь, ведёт, бьёт.",
     "СЕКУНДОМЕР: пуск — когда он СТАРТОВАЛ, стоп — удар. В замер входит всё: реакция, догон мяча, приём, ведение. Ждём Даниил 6-7 с, Адриан 5-6 с.",
     "Примерно на середине дистанции ты кричишь УДАР или ПАС.",
-    `ЧАСТЬ 1 · свежие: ${N_REP(f.DANIIL.length)} обоим, отдых ${REST.E15.fresh} секунд между повторами.`,
-    `ЧАСТЬ 2 · сразу после первой, на подсаженных ногах: только Даниил, ${N_REP(t.DANIIL.length)}, отдых ровно ${REST.E15.tired} секунд. Каждый заканчивается ударом: время и гол. Дельта считается по этим трём.`,
-    `Адриан в это время бьёт ${a.shots} раз с места с ближней дистанции (${a.range}).`,
-    "Стоп-правило в части 2 не применяется: падение времени и есть измеряемая величина."];},
-  reps_text:()=>{const f=e15Slots(E15_FRESH), t=e15Slots(E15_TIRED), a=E15_SHOTS_A;
-    return `Часть 1: ${N_REP(f.DANIIL.length)} каждому, отдых ${REST.E15.fresh} сек.\nЧасть 2: Даниил ${N_REP(t.DANIIL.length)} через ${REST.E15.tired} сек, время и гол каждого (дельта 1-3); Адриан ${a.shots} ударов с места с ${a.range}.`;},
+    `${N_REP(n)} каждому подряд, отдых ровно ${REST.E15} секунд. Первый забег — на свежих ногах, поэтому дельта 1-3 честная.`,
+    "Каждый забег заканчивается ударом: пишем время и гол.",
+    "Стоп-правило не применяется: падение времени и есть измеряемая величина."];},
+  reps_text:(spec)=>`${N_REP(repsOf("E15","DANIIL",spec||S.spec))} каждому, отдых ${REST.E15} сек.\nВремя и гол каждого забега; по трём временам считается дельта 1-3.`,
   watchNote:E15_WATCH_RULE,
-  smotri:"Первое касание вперёд по ходу, длинное. Мяч отпускается на 3-4 м. Голова дважды: на ворота и на команду. В части 2 — держит ли скорость к третьему повтору.",
-  oshibka:"Тормозит обработать мяч, потом разгоняется — защитник достаёт. В части 2 экономит первый повтор, чтобы сохранить третий — тогда замер бессмысленен.",
-  pravilno:"От паса до удара ни одного замедления. Все три повтора части 2 на максимуме, разница мала.",
-  match:"Прямая копия игры Даниила: передача из-за спины, приём на скорости, рывок через половину, завершение. Часть 2 — второй и третий отрыв за игру, когда ноги уже подсели.",
-  diff:{DANIIL:"~36 м, команда на 25-м метре. Часть 2: три повтора через 90 сек, каждый с ударом.",
-        ADRIAN:"~27 м, команда на 18-м метре. Часть 2 не бежит: в 10 лет повторные максимальные усилия только утомляют — бьёт 10 раз с места с 11-14 м."},
-  rec:"Часть 1: время и гол каждой попытки, обоим. Часть 2 Даниил: время, гол и дельта 1-3 по трём повторам. Часть 2 Адриан: голы из 10 ударов с места.",
+  smotri:"Первое касание вперёд по ходу, длинное. Мяч отпускается на 3-4 м. Голова дважды: на ворота и на команду. Держит ли скорость к третьему забегу.",
+  oshibka:"Тормозит обработать мяч, потом разгоняется — защитник достаёт. Экономит первый забег, чтобы сохранить третий — тогда замер бессмысленен.",
+  pravilno:"От паса до удара ни одного замедления. Все три забега на максимуме, разница мала.",
+  match:"Прямая копия игры Даниила: передача из-за спины, приём на скорости, рывок через половину, завершение. Три забега подряд — второй и третий отрыв за игру, когда ноги уже подсели.",
+  diff:{DANIIL:"~36 м, команда на 25-м метре.",
+        ADRIAN:"~27 м, команда на 18-м метре."},
+  rec:"Время и гол каждого забега, обоим. Дельта 1-3 считается по трём временам.",
 },
 E08:{ name:"Ведение + удар", type:"time_goal",
   setup:()=>`Контрольный день. Даниил — от центра поля ${DIST.E08_D.DANIIL} м, Адриан — ${DIST.E08_A.ADRIAN} м.\nТы у ворот.`,
@@ -995,55 +999,58 @@ function slot(player,ex,variant,dist,no,rest,extra){
 /* Облегчённый режим срезает ХВОСТ серии: остаются первые N слотов, номера
    попыток и порядок вариантов не меняются. Ноль слотов — упражнение у этого
    игрока сегодня не идёт. */
-function lightTrim(code,R){
+function lightReps(code,pl){
   const n=LIGHT_REPS[code];
-  if(n===undefined)return R;
-  PLAYERS.forEach(pl=>{ if(isLight(pl)) R[pl]=(R[pl]||[]).slice(0,n); });
+  if(n===undefined)return undefined;
+  return (typeof n==="object")?n[pl]:n;
+}
+function lightTrim(code,R){
+  if(LIGHT_REPS[code]===undefined)return R;
+  PLAYERS.forEach(pl=>{ if(isLight(pl)) R[pl]=(R[pl]||[]).slice(0,lightReps(code,pl)); });
   return R;
 }
 function repsFor(code,spec){
-  const R={DANIIL:[],ADRIAN:[]}, p2=(spec.phase===2);
+  const R={DANIIL:[],ADRIAN:[]};
   const push=(pl,arr)=>{R[pl]=arr;};
-  if(code==="E01"){
-    // Фаза 2 режет объём: 4/4 вместо 6/5.
-    const dv=p2?[["stance",1],["stance",2],["sit_face",3],["sit_back",4]]
-               :[["stance",1],["stance",2],["sit_face",3],["sit_face",4],["lie",5],["sit_back",6]];
-    const av=p2?[["stance",1],["stance",2],["sit_back",3],["sit_back",4]]
-               :[["stance",1],["stance",2],["sit_back",3],["sit_back",4],["sit_back",5]];
+  if(code==="E17"){
+    // «Прыжки и старт»: 3 подхода обоим, прыжков подряд разное число.
+    push("DANIIL",[1,2,3].map(n=>slot("DANIIL","E17","",DIST.E17.DANIIL,n,REST.E17)));
+    push("ADRIAN",[1,2,3].map(n=>slot("ADRIAN","E17","",DIST.E17.ADRIAN,n,REST.E17)));
+  } else if(code==="E01"){
+    const dv=[["stance",1],["stance",2],["sit_face",3],["sit_face",4],["lie",5],["sit_back",6]];
+    const av=[["stance",1],["stance",2],["sit_back",3],["sit_back",4],["sit_back",5]];
     push("DANIIL",dv.map(([v,n])=>slot("DANIIL","E01",v,DIST.E01.DANIIL,n,REST.E01)));
     push("ADRIAN",av.map(([v,n])=>slot("ADRIAN","E01",v,DIST.E01.ADRIAN,n,REST.E01)));
     R.DANIIL[0].firstRest=true; R.ADRIAN[0].firstRest=true;
   } else if(code==="E02"){
     const bw=e02Biweekly(spec.iso);
-    if(p2){ // 4/3, без длинных с ходу
-      const e2=(pl,v,n)=>slot(pl,"E02",v,DIST.E02[v],n,REST.E02[v]);
-      push("DANIIL",[e2("DANIIL","20m",1),e2("DANIIL","20m",2),
-        e2("DANIIL","25m_fly",3),e2("DANIIL","25m_fly",4)]);
-      push("ADRIAN",[e2("ADRIAN","15m",1),e2("ADRIAN","15m",2),e2("ADRIAN","20m",3)]);
-    } else {
-      const e2=(pl,v,n)=>slot(pl,"E02",v,DIST.E02[v],n,REST.E02[v]);
-      const long3=bw?"30m_fly":"25m_fly";
-      push("DANIIL",[e2("DANIIL","20m",1),e2("DANIIL","20m",2),e2("DANIIL","20m",3),
-        e2("DANIIL","25m_fly",4),e2("DANIIL","25m_fly",5),e2("DANIIL",long3,6)]);
-      push("ADRIAN",[e2("ADRIAN","15m",1),e2("ADRIAN","15m",2),e2("ADRIAN","15m",3),
-        e2("ADRIAN","20m",4),e2("ADRIAN","20m",5)]);
-    }
+    const e2=(pl,v,n)=>slot(pl,"E02",v,DIST.E02[v],n,REST.E02[v]);
+    const long3=bw?"30m_fly":"25m_fly";
+    push("DANIIL",[e2("DANIIL","20m",1),e2("DANIIL","20m",2),e2("DANIIL","20m",3),
+      e2("DANIIL","25m_fly",4),e2("DANIIL","25m_fly",5),e2("DANIIL",long3,6)]);
+    push("ADRIAN",[e2("ADRIAN","15m",1),e2("ADRIAN","15m",2),e2("ADRIAN","15m",3),
+      e2("ADRIAN","20m",4),e2("ADRIAN","20m",5)]);
   } else if(code==="E06"){
     push("DANIIL",[1,2,3,4,5].map(n=>slot("DANIIL","E06","",DIST.E06.DANIIL,n,REST.E06)));
     push("ADRIAN",[1,2,3,4,5].map(n=>slot("ADRIAN","E06","",DIST.E06.ADRIAN,n,REST.E06)));
   } else if(code==="E04"){
-    const nn=p2?4:6;  // Фаза 2 — 4 прохода
+    const nn=6;
     push("DANIIL",Array.from({length:nn},(_,i)=>slot("DANIIL","E04","",DIST.E04.DANIIL,i+1,REST.E04.DANIIL,{goal:true})));
     push("ADRIAN",Array.from({length:nn},(_,i)=>slot("ADRIAN","E04","",DIST.E04.ADRIAN,i+1,REST.E04.ADRIAN,{goal:true})));
   } else if(code==="E05"){
     push("DANIIL",[1,2,3,4,5,6].map(n=>slot("DANIIL","E05","",DIST.E05.DANIIL,n,REST.E05.DANIIL,{goal:true})));
     push("ADRIAN",[1,2,3,4,5,6].map(n=>slot("ADRIAN","E05","",DIST.E05.ADRIAN,n,REST.E05.ADRIAN,{goal:true})));
   } else if(code==="E10S"){
-    const nn=e10sReps(spec);  // 5 повторов, в обеих фазах
+    const nn=e10sReps(spec);  // 6 повторов во все дни
     push("DANIIL",Array.from({length:nn},(_,i)=>slot("DANIIL","E10S","",DIST.E10S.DANIIL,i+1,REST.E10S,{goal:true})));
     push("ADRIAN",Array.from({length:nn},(_,i)=>slot("ADRIAN","E10S","",DIST.E10S.ADRIAN,i+1,REST.E10S,{goal:true})));
   } else if(code==="E15"){
-    return e15Slots(E15_FRESH);   // часть 2 строится отдельно, после части 1
+    // Три забега обоим подряд, без деления на части. Стоп-правила нет
+    // (noStop): падение времени здесь — измеряемая величина, а не повод
+    // остановить серию. Каждый забег кончается ударом, гол пишется по всем.
+    const e15=(pl)=>Array.from({length:E15_REPS},(_,i)=>
+      slot(pl,"E15","",DIST.E15[pl],i+1,REST.E15,{goal:true,noStop:true}));
+    push("DANIIL",e15("DANIIL")); push("ADRIAN",e15("ADRIAN"));
   } else if(code==="E08"){
     push("DANIIL",[1,2,3,4,5].map(n=>slot("DANIIL","E08_D","",DIST.E08_D.DANIIL,n,REST.E08,{goal:true})));
     push("ADRIAN",[1,2,3,4,5].map(n=>slot("ADRIAN","E08_A","",DIST.E08_A.ADRIAN,n,REST.E08,{goal:true})));
@@ -1051,20 +1058,6 @@ function repsFor(code,spec){
   }
   return lightTrim(code,R);
 }
-// «Отрыв»: часть 1 — оба по 5 через 2 мин; часть 2 — только Даниил,
-// 3 повтора через 90 сек и без стоп-правила (noStop). goal:true в обеих
-// частях: каждый повтор кончается ударом, гол пишется по каждому.
-function e15Slots(part){
-  // В облегчённом части 2 нет вовсе: повторный максимальный рывок — это то,
-  // ради чего день тяжёлый, и урезать его до одного повтора бессмысленно.
-  if(part===E15_TIRED) return {
-    DANIIL:isLight("DANIIL")?[]:[1,2,3].map(n=>slot("DANIIL","E15",E15_TIRED,DIST.E15.DANIIL,n,REST.E15.tired,{goal:true,noStop:true})),
-    ADRIAN:[]};
-  return lightTrim("E15",{
-    DANIIL:[1,2,3,4,5].map(n=>slot("DANIIL","E15",E15_FRESH,DIST.E15.DANIIL,n,REST.E15.fresh,{goal:true})),
-    ADRIAN:[1,2,3,4,5].map(n=>slot("ADRIAN","E15",E15_FRESH,DIST.E15.ADRIAN,n,REST.E15.fresh,{goal:true}))});
-}
-
 /* ================================================================
    ХРАНЕНИЕ
    ================================================================ */
@@ -1134,7 +1127,7 @@ function attemptFields(o){
     time_sec:(o.time_sec!==undefined&&o.time_sec!==null)?Number(Number(o.time_sec).toFixed(2)):null,
     distance_m:o.dist||o.distance_m||null,control:o.control??null,goals:o.goals??null,
     shots:o.shots??null,wellbeing:o.wellbeing??null,
-    shortened:(S.spec.shortened||S.shortened||false),note:o.note||"",lost:!!o.lost,
+    shortened:!!(S&&S.shortened),note:o.note||"",lost:!!o.lost,
     interrupted:!!(S&&S.interrupted),
     // Облегчённый режим — по игроку: у второго брата записи обычные.
     light:isLight(o.player)};
@@ -1184,7 +1177,7 @@ function smallActions(){return `<div class="small-actions">
   <button class="ghost small" onclick="showBlockScheme()">Схема</button>
   <button class="ghost small" onclick="showBlockWhat()">Что делать</button>
   <button class="ghost small" onclick="askNote()">Заметка</button>
-  <button class="ghost small" onclick="confirmFinishExercise()">Завершить упражнение</button></div>
+  <button class="ghost small" onclick="confirmSkipExercise()">Пропустить упражнение</button></div>
   <div class="cancel-row"><button class="warn small" onclick="confirmCancel()">Отмена занятия</button></div>`;}
 function confirmCancel(){
   overlay(`<div class="card"><div class="title">Отменить занятие?</div>
@@ -1195,9 +1188,12 @@ function confirmCancel(){
     <div class="row"><button class="warn" onclick="cancelSession()">Да, отменить</button>
       <button class="go" onclick="closeOverlay();resumeStep()">Продолжить</button></div></div>`);
 }
-/* Занятие оборвано: жара, отмена, упражнение закрыто на середине. Записи
-   сохраняются целиком, но помечаются interrupted — в рекорды и недельные
-   проценты они не идут: одна подсерия из девяти дала бы «8 из 8 (100%)». */
+/* ЗАНЯТИЕ ЦЕЛИКОМ ОБОРВАНО тренером (жара, самочувствие) — «Отмена занятия».
+   Записи сохраняются, но помечаются interrupted: в рекорды и недельные
+   проценты они не идут, потому что оборвано занятие, а не упражнение.
+   Это ЕДИНСТВЕННОЕ место, где флаг ставится. Пропуск упражнения его НЕ
+   ставит: shots там равен фактически выполненным повторам, процент честный,
+   а замеры времени сделанных повторов сравнимы с любыми другими. */
 function markInterrupted(){
   if(!S)return;
   S.interrupted=true;
@@ -1210,33 +1206,78 @@ function markInterrupted(){
 }
 function cancelSession(){ markInterrupted(); closeOverlay(); stopCountdown();
   stopRestBadge(); screenHome(); }
-/* Завершить УПРАЖНЕНИЕ — не занятие. Записанное остаётся, занятие идёт
-   дальше со следующего блока; заминка и итог никуда не деваются. Раньше
-   единственной кнопкой была «Отмена», и остановка упражнения обрывала
-   занятие целиком. */
-function confirmFinishExercise(){
+/* ПРОПУСК УПРАЖНЕНИЯ — по ИГРОКУ, не по занятию. Применяется к тому, чья
+   очередь сейчас на экране: он выбывает из этого упражнения, второй
+   доделывает свои повторы до конца (без чередования, с обычным отдыхом).
+   Нажали ещё раз, когда очередь второго — упражнение закрывается целиком
+   и занятие идёт со следующего блока. Раньше кнопка называлась «Завершить
+   упражнение» и закрывала блок сразу обоим.
+
+   В записях пропуск отражается ОТСУТСТВИЕМ записей — ни отдельного флага,
+   ни пометки interrupted. Сделал 2 повтора из 6 и пропустил остальные —
+   записей две, shots = 2, процент считается от двух. Данные нормальные:
+   они идут в рекорды и недельные проценты как обычные. */
+function skippedPlayers(){ return (S.block&&S.block.skip)||{}; }
+function isSkipped(pl){ return !!skippedPlayers()[pl]; }
+// Чей повтор сейчас на экране — одна точка на все типы упражнений.
+function currentWorkPlayer(){
+  if(!S)return null;
+  if(S.measure&&S.measure.order[S.measure.pos])return S.measure.order[S.measure.pos].player;
+  if(S.ctrl&&S.ctrl.order[S.ctrl.pos])return S.ctrl.order[S.ctrl.pos].player;
+  if(S.duelrun&&S.duelrun.order[S.duelrun.pos])return S.duelrun.order[S.duelrun.pos].player;
+  if(S.four)return S.four.player;
+  if(S.shots)return S.shots.player;
+  return null;
+}
+function confirmSkipExercise(){
   const name=(S&&S.block&&EX[S.block.ex])?EX[S.block.ex].name:"упражнение";
-  overlay(`<div class="card"><div class="title">Завершить «${name}»?</div>
-    <div class="note">Записанное сохранится. Занятие продолжится со следующего
-    блока — это НЕ отмена занятия.</div>
-    <div class="row"><button class="go" onclick="finishExercise()">Завершить упражнение</button>
+  const pl=currentWorkPlayer();
+  if(!pl) return overlay(`<div class="card"><div class="title">Пропустить «${name}»?</div>
+    <div class="note">Занятие продолжится со следующего блока — это НЕ отмена занятия.</div>
+    <div class="row"><button class="go" onclick="finishExercise()">Да</button>
+      <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
+  const other=pl==="DANIIL"?"ADRIAN":"DANIIL";
+  const alone=isSkipped(other);
+  overlay(`<div class="card"><div class="title">Пропустить упражнение для ${RU[pl]}?</div>
+    <div class="note">${alone?`${RU[other]} уже пропустил — упражнение закроется целиком.`
+                             :`${RU[other]} продолжит.`}</div>
+    <div class="row"><button class="go" onclick="skipExercise('${pl}')">Да</button>
       <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
 }
-function finishExercise(){
-  // Упражнение закрыто, не дойдя до конца серии — занятие считается
-  // прерванным: данные неполные, сравнивать их с полными нельзя.
-  const left=(S.measure&&S.measure.pos<S.measure.order.length)
-    ||(S.ctrl&&S.ctrl.pos<S.ctrl.order.length)
-    ||(S.duelrun&&S.duelrun.pos<S.duelrun.order.length)
-    ||!!S.four;
-  if(left) markInterrupted();
+function skipExercise(pl){
+  if(!S.block)S.block={ex:(S.measure||S.ctrl||S.duelrun||{}).ex||""};
+  S.block.skip=S.block.skip||{};
+  S.block.skip[pl]=true;
   closeOverlay(); stopCountdown(); stopRestBadge();
   if(S._restTimer){clearInterval(S._restTimer);S._restTimer=null;}
   if(S.watch&&S.watch.running){S.watch.running=false;
     if(S.watch.raf)cancelAnimationFrame(S.watch.raf);}
-  ["measure","ctrl","duelrun","four","shots","e15s"].forEach(k=>{delete S[k];});
+  saveSession();
+  // Оба пропустили — упражнение закрыто; иначе второй доигрывает своё.
+  if(PLAYERS.every(p=>isSkipped(p))) return closeExercise();
+  if(S.measure)return measureAdvance();
+  if(S.ctrl)return ctrlAdvance();
+  if(S.duelrun)return duelRunAdvance();
+  if(S.four)return fourNextPlayer();
+  if(S.shots)return shotsSkipPlayer();
+  return closeExercise();
+}
+function closeExercise(){
+  closeCurrentWork();
   saveSession(); nextStep();
 }
+function closeCurrentWork(){
+  closeOverlay(); stopCountdown(); stopRestBadge();
+  if(S._restTimer){clearInterval(S._restTimer);S._restTimer=null;}
+  if(S.watch&&S.watch.running){S.watch.running=false;
+    if(S.watch.raf)cancelAnimationFrame(S.watch.raf);}
+  ["measure","ctrl","duelrun","four","shots"].forEach(k=>{delete S[k];});
+}
+/* Закрыть упражнение обоим сразу. Отдельная точка входа: сюда приходят из
+   подтверждения, когда чья-то очередь не определена (экраны без повторов).
+   Прерванным занятие при этом НЕ становится: сколько успели — столько
+   и записано, и это нормальные данные. */
+function finishExercise(){ closeExercise(); }
 // «Что делать» текущего упражнения — оверлеем, без потери прогресса.
 function showBlockWhat(){
   if(!S||!S.block)return; const e=EX[S.block.ex];
@@ -1312,7 +1353,6 @@ function screenHome(){
     ${n>0?`<div class="row"><button onclick="uploadAll()">Выгрузить: ${n} записей</button></div>`:""}
     ${(n>0&&localStorage.getItem("trening_copied")==="1")?
       `<div class="row"><button class="go" onclick="confirmMark()">Отметить выгруженным</button></div>`:""}
-    ${spec.phase===2?`<div class="row"><button class="ghost" onclick="screenWeek()">Расписание на неделю</button></div>`:""}
     <div class="row"><button class="ghost" onclick="toggleSound()">Звук: ${soundOn()?"вкл":"выкл"}</button>
       <button class="ghost" onclick="screenImport()">Импорт рекордов</button></div>
     <div class="row"><button class="ghost" onclick="screenLast()">Последнее занятие</button>
@@ -1352,9 +1392,9 @@ function forceUpdate(){
 function startFlow(){ screenDayConfirm(determineDay(dateToIso(new Date()))); }
 function screenDayConfirm(spec){
   S={spec,attempts:[],wellbeing:{},light:{DANIIL:false,ADRIAN:false},
-     shortened:spec.shortened,startMs:null,block:null};
+     shortened:false,startMs:null,block:null};
   h(`<h1>Старт</h1>
-    <div class="card"><div class="sub">${spec.iso} · ${WD_RU[wdOf(spec.iso)]} · Фаза ${spec.phase}${spec.week?", неделя "+spec.week:""}</div>
+    <div class="card"><div class="sub">${spec.iso} · ${WD_RU[wdOf(spec.iso)]}${spec.week?" · неделя "+spec.week:""}</div>
       <div class="title">${spec.goal}</div>
       <div class="note">${spec.minutes} минут${spec.reason?" · "+spec.reason:""}</div></div>
     <div class="reps">Порядок дня:<br>${spec.blocks.map((b,i)=>(i+1)+". "+EX[b[0]].name).join("<br>")}</div>
@@ -1527,13 +1567,17 @@ function screenWhat(st){
    ЭКРАН 3 · РАБОТА — по типу упражнения
    ================================================================ */
 function startWork(st){
-  const e=EX[st.ex]; S.block={ex:st.ex};
+  // Хвост предыдущего упражнения в новом блоке жить не должен: иначе
+  // «чья сейчас очередь» читается из чужого состояния.
+  ["measure","ctrl","duelrun","four","shots"].forEach(k=>{delete S[k];});
+  // skip — кто пропустил ЭТО упражнение; на каждом блоке заново.
+  const e=EX[st.ex]; S.block={ex:st.ex,skip:{}};
   if(e.type==="duel")return workDuel(st);
   if(e.type==="duel_goals")return workDuelGoals(st);
   if(e.type==="shots")return workShots(st);
   if(e.type==="control")return workControl(st);
   if(e.type==="four")return workFour(st);
-  if(e.type==="breakaway")return startMeasure(st,E15_FRESH);
+  if(e.type==="breakaway")return startMeasure(st);
   return startMeasure(st); // time, time_goal
 }
 function workDuel(st){
@@ -1573,6 +1617,7 @@ function duelRunStart(st){
 }
 function duelRunAdvance(){
   const d=S.duelrun;
+  while(d.pos<d.order.length&&isSkipped(d.order[d.pos].player))d.pos++;
   if(d.pos>=d.order.length){        // всё записано по ходу — ввода не нужно
     delete S.duelrun; saveSession(); return nextStep();
   }
@@ -1619,16 +1664,16 @@ function duelRunSkipRest(){ stopCountdown();
   const d=S.duelrun; d.readyAt[d.order[d.pos].player]=Date.now(); duelRunAdvance(); }
 
 /* ---- Измеряемые упражнения (time / time_goal / breakaway) ---- */
-function startMeasure(st,part){
+function startMeasure(st){
   const e=EX[st.ex];
-  const plan=(st.ex==="E15")?e15Slots(part):repsFor(st.ex,S.spec);
+  const plan=repsFor(st.ex,S.spec);
   const order=[]; const mx=Math.max(plan.DANIIL.length,plan.ADRIAN.length);
   for(let i=0;i<mx;i++){ if(plan.DANIIL[i])order.push(plan.DANIIL[i]);
     if(plan.ADRIAN[i])order.push(plan.ADRIAN[i]); }
   // best и stopped — ПО СЕРИЯМ, а серия это игрок+вариант: старт сидя
   // всегда медленнее старта стоя, 20 м медленнее 15 м, и общий лучший
   // результат обрывал бы серию на ровном месте (dupl. bot/rules.py).
-  S.measure={ex:st.ex,type:e.type,part:part||"",order,pos:0,
+  S.measure={ex:st.ex,type:e.type,order,pos:0,
     stopped:{}, best:{},
     readyAt:{DANIIL:0,ADRIAN:0},firstDone:{DANIIL:false,ADRIAN:false}};
   saveSession(); measureAdvance();
@@ -1637,7 +1682,9 @@ function startMeasure(st,part){
 function seriesKey(cur){ return cur.player+"|"+(cur.variant||""); }
 function measureAdvance(){
   const m=S.measure;
-  while(m.pos<m.order.length&&m.stopped[seriesKey(m.order[m.pos])])m.pos++;
+  // Пропущенный игрок выпадает из очереди, второй доигрывает своё.
+  while(m.pos<m.order.length&&(m.stopped[seriesKey(m.order[m.pos])]
+        ||isSkipped(m.order[m.pos].player)))m.pos++;
   if(m.pos>=m.order.length)return afterMeasure();
   const cur=m.order[m.pos];
   if(cur.firstRest&&!m.firstDone[cur.player]) return screenFullRest(cur);
@@ -1647,65 +1694,38 @@ function measureAdvance(){
 }
 function afterMeasure(){
   const m=S.measure;
-  /* «Отрыв»: часть 1 → часть 2 Даниила → дельта → удары Адриана.
-     В облегчённом у Даниила части 2 нет, а значит нет и дельты 1-3:
-     считать её не по чему. В облегчённом у Адриана нет ударов с места. */
-  if(m.ex==="E15"){
-    if(m.part===E15_FRESH&&!isLight("DANIIL")) return screenBreakawayPart2();
-    if(m.part===E15_FRESH){ m.part=E15_TIRED; m.deltaShown=true; }
-    if(!m.deltaShown){ m.deltaShown=true; return screenBreakawayDelta(); }
-    if(!m.adrianDone){ m.adrianDone=true;
-      if(!isLight("ADRIAN")) return e15ShotsPick(); }
-  }
+  /* «Отрыв»: три забега подряд, потом экран дельты 1-3. Деления на части
+     нет с 19.08, ударов Адриана с места тоже — он бежит наравне. Дельту
+     показываем каждому, у кого набралось хотя бы два зачётных забега. */
+  if(m.ex==="E15"&&!m.deltaShown){ m.deltaShown=true; return screenBreakawayDelta(); }
   // Упражнение закрыто: снимаем состояние, иначе оно висит в сохранённой
   // сессии и при возврате в приложение мешает продолжить следующее.
   delete S.measure; saveSession();
   nextStep();
 }
-function screenBreakawayPart2(){
-  h(`<h1>Отрыв · часть 2</h1>
-    <div class="card"><div class="title">На подсаженных ногах</div>
-      <div class="note" style="margin-top:8px">Сразу после части 1, без паузы.
-      Даниил: 3 повтора, отдых ровно 90 секунд. Стоп-правила нет.
-      Каждый повтор кончается ударом — после секундомера спросим гол.
-      ${E15_WATCH_RULE}
-      Адриан после этого — 10 ударов с места с ${E15_SHOTS_A.range}.</div></div>
-    <div class="row"><button class="go" onclick="startBreakawayPart2()">Начали</button></div>
-    ${smallActions()}`);
-}
-function startBreakawayPart2(){ startMeasure({ex:"E15"},E15_TIRED); }
 // Приложение само считает дельту 1-3 — тренер не считает руками.
-function screenBreakawayDelta(){
-  const times=S.attempts.filter(a=>a.player==="DANIIL"&&a.exercise_id==="E15"
-      &&a.variant===E15_TIRED&&a.time_sec!==null&&!a.lost)
+function breakawayTimes(player){
+  return S.attempts.filter(a=>a.player===player&&a.exercise_id==="E15"
+      &&a.time_sec!==null&&!a.lost)
     .sort((a,b)=>a.attempt_no-b.attempt_no).map(a=>a.time_sec);
-  const d=times.length>=2?Math.round((times[times.length-1]-times[0])*100)/100:null;
-  let verdict="";
-  if(d!==null) verdict = oldBreakawayTiming()
-    ? "Старый формат замера: дельта не оценивается."
-    : d<0.3?"Способен повторить отрыв."
-    : d<=0.6?"На границе." : "Не способен, ноги не восстанавливаются между всплесками.";
-  h(`<h1>Отрыв · часть 2</h1>
-    <div class="card center"><div class="name">ДАНИИЛ</div>
-      <div class="big" style="font-size:30px">${times.map(t=>t.toFixed(2)).join(" → ")||"—"}</div>
+}
+function screenBreakawayDelta(){
+  const cards=PLAYERS.map(pl=>{
+    const times=breakawayTimes(pl);
+    const d=times.length>=2?Math.round((times[times.length-1]-times[0])*100)/100:null;
+    let verdict="";
+    if(d!==null) verdict = oldBreakawayTiming()
+      ? "Старый формат замера: дельта не оценивается."
+      : d<0.3?"Способен повторить отрыв."
+      : d<=0.6?"На границе." : "Не способен, ноги не восстанавливаются между всплесками.";
+    if(!times.length) return "";
+    return `<div class="card center"><div class="name">${RU[pl]}</div>
+      <div class="big" style="font-size:30px">${times.map(t=>t.toFixed(2)).join(" → ")}</div>
       <div class="title">Дельта 1-3: ${d!==null?d.toFixed(2):"—"}</div>
-      <div class="note">${verdict}</div></div>
+      <div class="note">${verdict}</div></div>`;
+  }).join("");
+  h(`<h1>Отрыв · дельта</h1>${cards||`<div class="card center"><div class="note">Замеров нет.</div></div>`}
     <div class="row"><button class="go" onclick="afterMeasure()">Дальше</button></div>`);
-}
-/* Часть 2 Адриана: 10 ударов С МЕСТА с ближней дистанции, «Сколько забил
-   из 10?». Ведения там нет — мяч лежит, поэтому и название такое. */
-function e15ShotsPick(){
-  const s=E15_SHOTS_A;
-  h(`${countHeader("ADRIAN",`${s.name} · ${s.kind} ${s.range}`,s.shots,"ударов")}
-    <div class="title">Отрыв · часть 2</div>
-    <div class="note">Мяч лежит, бьёт с места. Сколько забил из ${s.shots}?</div>
-    <div class="gridN">${Array.from({length:s.shots+1},(_,i)=>`<button onclick="e15ShotsSave(${i})">${i}</button>`).join("")}</div>
-    ${smallActions()}`);
-}
-function e15ShotsSave(g){
-  const s=E15_SHOTS_A;
-  pushAttempt({player:"ADRIAN",ex:"E15",variant:s.v,goals:g,shots:s.shots,dist:s.dist});
-  delete S.measure; saveSession(); nextStep();
 }
 function screenFullRest(cur){
   // exOf, а не EX[...]: в контрольный день коды слотов E08_D/E08_A.
@@ -1797,8 +1817,7 @@ function variantLabel(cur){
   const V={stance:"стойка",sit_face:"сидя лицом",sit_back:"сидя спиной",lie:"лёжа",
     spin:"спиной",side:"боком",
     "20m":`${DIST.E02["20m"]} м`,"15m":`${DIST.E02["15m"]} м`,
-    "25m_fly":`замер ${E02_MEASURE["25m_fly"]} м с ходу`,"30m_fly":`замер ${E02_MEASURE["30m_fly"]} м с ходу`,
-    fresh:"часть 1 · свежие",tired:"часть 2 · на усталости"};
+    "25m_fly":`замер ${E02_MEASURE["25m_fly"]} м с ходу`,"30m_fly":`замер ${E02_MEASURE["30m_fly"]} м с ходу`};
   if(cur.variant&&V[cur.variant])return V[cur.variant];
   if(cur.dist)return cur.dist+" м";
   return "";
@@ -1951,6 +1970,7 @@ function workShots(st){ // подсерия за подсерией, внутр�
   const ex=st.ex;
   S.shots={ex,player:"DANIIL",sub:0,dist:shotsDist(ex),
     word:EX[ex].shotsWord||"ударов", verb:EX[ex].shotsVerb||"попал"};
+  if(isSkipped("DANIIL"))return shotsSkipPlayer();
   shotsRender();
 }
 function shotsRender(){
@@ -1965,9 +1985,15 @@ function shotsRender(){
 function shotsSave(g){const s=S.shots, sub=E07_SUBS[s.sub];
   pushAttempt({player:s.player,ex:s.ex,variant:sub.v,attempt_no:s.sub+1,
     goals:g,shots:e07Shots(s.player),dist:s.dist[s.player]});
-  if(s.player==="DANIIL"){s.player="ADRIAN";return shotsRender();}
-  s.player="DANIIL"; s.sub++;
-  if(s.sub>=E07_SUBS.length){ delete S.shots; return nextStep(); }
+  return shotsSkipPlayer();
+}
+// Следующий, кто ещё в упражнении: пропустившего перешагиваем.
+function shotsSkipPlayer(){
+  const s=S.shots;
+  if(s.player==="DANIIL"){s.player="ADRIAN";}
+  else { s.player="DANIIL"; s.sub++; }
+  if(s.sub>=E07_SUBS.length){ delete S.shots; saveSession(); return nextStep(); }
+  if(isSkipped(s.player))return shotsSkipPlayer();
   return shotsRender();
 }
 /* ---- control: контроль 1-5 + голы из N (E13) ---- */
@@ -1997,6 +2023,7 @@ function workControl(st){
 }
 function ctrlAdvance(){
   const c=S.ctrl;
+  while(c.pos<c.order.length&&isSkipped(c.order[c.pos].player))c.pos++;
   if(c.pos>=c.order.length){        // всё записано по ходу — ввода не нужно
     delete S.ctrl; saveSession(); return nextStep();
   }
@@ -2056,7 +2083,8 @@ function e10SeriesShots(series){return e10subs(series).reduce((a,s)=>a+s.shots,0
 function workFour(st){ S.four={series:1,player:"DANIIL",queue:null,pos:0}; fourEnter(); }
 // Серия 4 (рывок на пас) в облегчённом режиме убрана: это беговая работа,
 // а не удары. Серии 1-3 остаются, в подсерии три удара вместо пяти.
-function fourHasWork(series,player){ return !(series===4&&isLight(player)); }
+function fourHasWork(series,player){
+  return !isSkipped(player)&&!(series===4&&isLight(player)); }
 // Вход в (серия, игрок): экран выбора первой подсерии.
 function fourEnter(){
   const f=S.four, subs=e10subs(f.series);
@@ -2075,7 +2103,7 @@ function fourNextPlayer(){
     f.series++; f.player="DANIIL"; f.queue=null; f.pos=0;
     if(PLAYERS.some(pl=>fourHasWork(f.series,pl))) return fourSeriesBreak();
   }
-  delete S.four; return nextStep();
+  delete S.four; saveSession(); return nextStep();
 }
 function fourPick(v){
   const f=S.four, subs=e10subs(f.series).map(s=>s.v);
@@ -2197,7 +2225,7 @@ const E10_SERIES=[["С места",[["s1_near","ближняя"],["s1_far","да
   ["С фланга",[["s3_right","справа"],["s3_left","слева"]]],
   ["Рывок на пас",[["s4_left","слева"],["s4_center","центр"],["s4_right","справа"]]]];
 function exOf(ex){ return EX[ex]||EX[ex.replace(/_[DA]$/,"")]||null; }
-/* Поля описаний могут быть функциями дня: число повторов зависит от фазы,
+/* Поля описаний могут быть функциями дня: число повторов зависит от дня,
    поэтому текст считает его, а не помнит. */
 function txt(v,spec){ return (typeof v==="function")?v(spec||(S&&S.spec)):(v||""); }
 function stepsOf(e,spec){ return txt(e.steps,spec); }
@@ -2332,53 +2360,31 @@ function shotsChunk(list,total,player){
   pctRecordLines(total.g,total.s,rec).forEach(x=>lines.push(x));
   return {h:"Удары",lines};
 }
+/* «Отрыв» в итоге занятия: три забега подряд, дельта 1-3 и голы.
+   Деления на части нет с 19.08, отдельного блока ударов Адриана с места
+   тоже: он бежит наравне (dupl. bot/insights._breakaway_chunks). */
 function breakawayChunks(list,player){
-  const fresh=list.filter(a=>a.variant===E15_FRESH), tired=list.filter(a=>a.variant===E15_TIRED);
-  const subs=list.filter(a=>a.variant===E15_SHOTS_A.v);
   const lines=[];
-  if(fresh.length){
-    const rec=timeRecord(player,"E15",E15_FRESH,S.spec.iso), pctRec=ratioRecord(player,"E15",S.spec.iso);
-    const s=statsTxt(fresh,!tired.length,rec), t=goalsOf(fresh);
-    if(tired.length){
-      if(s){ lines.push(`Свежие: ${s}`); recordLines(fresh,rec).forEach(x=>lines.push(x)); }
-      if(t.s)lines.push(`  голы ${pctTxt(t.g,t.s)}${pctTail(pctRec)}`);
-    } else {
-      if(s){ lines.push(s); recordLines(fresh,rec).forEach(x=>lines.push(x)); }
-      if(t.s)lines.push(`Голы: ${pctTxt(t.g,t.s)}${pctTail(pctRec)}`);
-    }
+  const rec=timeRecord(player,"E15","",S.spec.iso), pctRec=ratioRecord(player,"E15",S.spec.iso);
+  const tt=list.slice().sort((a,b)=>a.attempt_no-b.attempt_no)
+    .filter(a=>a.time_sec!==null&&!a.lost).map(a=>a.time_sec);
+  if(tt.length){
+    lines.push(tt.map(x=>x.toFixed(2)).join(" → ")+
+      (rec===null?FIRST_MEASURE:`, рекорд ${rec.toFixed(2)}`));
+    recordLines(list,rec).forEach(x=>lines.push(x));
   }
-  if(tired.length){
-    const tt=tired.slice().sort((a,b)=>a.attempt_no-b.attempt_no)
-      .filter(a=>a.time_sec!==null&&!a.lost).map(a=>a.time_sec);
-    if(tt.length){
-      const tr=timeRecord(player,"E15",E15_TIRED,S.spec.iso);
-      lines.push("На усталости: "+tt.map(x=>x.toFixed(2)).join(" → ")+
-        (tr===null?FIRST_MEASURE:`, рекорд ${tr.toFixed(2)}`));
-    }
-    if(tt.length>=2){ const d=Math.round((tt[tt.length-1]-tt[0])*100)/100;
-      // По старому отрезку дельту не трактуем — ставим пометку.
-      const v=oldBreakawayTiming()?E15_OLD_TIMING
-        :d<0.3?"способен повторить отрыв":d<=0.6?"на границе"
-        :"не способен, ноги не восстанавливаются между всплесками";
-      lines.push(`  дельта 1-3: ${d.toFixed(2)} — ${v}`); }
-    const t=goalsOf(tired), tRec=ratioRecord(player,"E15",S.spec.iso,E15_TIRED);
-    if(t.s){ lines.push(`  голы ${pctTxt(t.g,t.s)}${pctTail(tRec)}`);
-      pctRecordLines(t.g,t.s,tRec).forEach(x=>lines.push(x)); }
-  }
-  const lost=fresh.concat(tired).filter(a=>a.lost).length;
+  if(tt.length>=2){ const d=Math.round((tt[tt.length-1]-tt[0])*100)/100;
+    // По старому отрезку дельту не трактуем — ставим пометку.
+    const v=oldBreakawayTiming()?E15_OLD_TIMING
+      :d<0.3?"способен повторить отрыв":d<=0.6?"на границе"
+      :"не способен, ноги не восстанавливаются между всплесками";
+    lines.push(`  дельта 1-3: ${d.toFixed(2)} — ${v}`); }
+  const t=goalsOf(list);
+  if(t.s){ lines.push(`Голы: ${pctTxt(t.g,t.s)}${pctTail(pctRec)}`);
+    pctRecordLines(t.g,t.s,pctRec).forEach(x=>lines.push(x)); }
+  const lost=list.filter(a=>a.lost).length;
   if(lost>0)lines.push(`Потерь мяча: ${lost}`);
-  const out=lines.length?[{h:"Отрыв",lines}]:[];
-  // Часть 2 Адриана: удары с места, дистанция названа явно.
-  if(subs.length){
-    const t=goalsOf(subs), sRec=ratioRecord(player,"E15",S.spec.iso,E15_SHOTS_A.v);
-    if(t.s){
-      const block=[`${E15_SHOTS_A.name}: ${pctTxt(t.g,t.s)}, `+
-        `${E15_SHOTS_A.kind} ${E15_SHOTS_A.range}${pctTail(sRec)}`];
-      pctRecordLines(t.g,t.s,sRec).forEach(x=>block.push(x));
-      out.push({lines:block});
-    }
-  }
-  return out;
+  return lines.length?[{h:"Отрыв",lines}]:[];
 }
 function summaryChunks(pl){
   const att=S.attempts.filter(a=>a.player===pl), byEx={};
@@ -2424,10 +2430,11 @@ function summaryCard(pl){
     ${body||'<div class="note">Замеров нет.</div>'}</div>`;
 }
 function finishLater(){clearSession();screenHome();}
+/* Выгрузка — только записи. Блока context (клубные дни и матчи) больше нет:
+   он существовал ради выбора типа занятия Фазы 2, а Фазы 2 нет. */
 function buildPayload(){
-  const pending=loadAttempts().filter(a=>!a.uploaded), c=ctx();
-  return {records:pending.map(a=>{const{uploaded,...r}=a;return r;}),
-    context:{club_days:[...c.club],match_days:[...c.match]}};
+  const pending=loadAttempts().filter(a=>!a.uploaded);
+  return {records:pending.map(a=>{const{uploaded,...r}=a;return r;})};
 }
 // Пометить всё выгруженным (после подтверждения приёма ботом) и снять флаг.
 function markUploaded(){ const all=loadAttempts();
@@ -2491,24 +2498,8 @@ function confirmMark(){
 function doMark(){ markUploaded(); closeOverlay(); screenHome(); }
 
 /* ================================================================
-   РАСПИСАНИЕ, ИМПОРТ, ПОСЛЕДНЕЕ, СБРОС
+   ИМПОРТ, ПОСЛЕДНЕЕ, СБРОС
    ================================================================ */
-function screenWeek(){
-  const c=ctx();
-  h(`<h1>Расписание на неделю</h1>
-    <div class="card"><div class="title">Клубные дни (через запятую)</div>
-      <input type="text" id="club" value="${[...c.club].join(", ")}"></div>
-    <div class="card"><div class="title">Даты матчей</div>
-      <input type="text" id="match" value="${[...c.match].join(", ")}"></div>
-    <div class="note">Формат: 2026-08-21, 2026-08-24</div>
-    <div class="row"><button class="go" onclick="saveWeek()">Сохранить</button>
-      <button class="ghost" onclick="screenHome()">Назад</button></div>`);
-}
-function saveWeek(){
-  const p=id=>document.getElementById(id).value.split(",").map(s=>s.trim()).filter(s=>/^\d{4}-\d{2}-\d{2}$/.test(s));
-  localStorage.setItem("trening_ctx",JSON.stringify({club_days:p("club"),match_days:p("match")}));
-  screenHome();
-}
 function screenImport(){
   h(`<h1>Импорт рекордов</h1>
     <div class="note">Вставьте слепок из ответа бота (по игроку). Он показывается на поле в строке «Пред. · рекорд».</div>
@@ -2558,7 +2549,7 @@ function confirmReset(){
       <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
 }
 function resetData(){
-  ["trening_attempts","trening_records","trening_ctx","trening_session","trening_hot","trening_copied"].forEach(k=>localStorage.removeItem(k));
+  ["trening_attempts","trening_records","trening_session","trening_hot","trening_copied"].forEach(k=>localStorage.removeItem(k));
   if(sessionTimer){clearInterval(sessionTimer);sessionTimer=null;} S=null;
   closeOverlay(); screenHome();
 }
