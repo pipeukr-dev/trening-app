@@ -89,7 +89,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260825-0150-f05962f';
+const BUILD = '20260825-0210-ad60499';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -141,7 +141,6 @@ const DIST={
   // Режим 2 (dupl. bot/catalog.py distances_m).
   E18:{DANIIL:20,ADRIAN:15},   // замеряемый участок после разгона
   E19:{DANIIL:30,ADRIAN:20},
-  E20:{DANIIL:30,ADRIAN:20},
   E22:{DANIIL:5,ADRIAN:4},     // радиус звезды
   E24:{DANIIL:10,ADRIAN:8},
   E27:{DANIIL:5,ADRIAN:4},     // между фишками челнока
@@ -164,8 +163,6 @@ const E19_REPS={DANIIL:6,ADRIAN:5};
 const E19_FADE_GOOD=0.4, E19_FADE_BAD=0.8;
 const E19_FADE_VERDICTS={hold:"держит скорость в серии",edge:"на границе",
   fade:"садится, восстановление слабое"};
-// «Ведение на скорость» (E20).
-const E20_REPS=5;
 // «Координационная лестница» (E03) — отдельный блок среды режима 2.
 const E03_DRILLS=["два шага в ячейку","один шаг, максимально часто",
   "боком приставным","внутрь-наружу","крест-накрест","с разворотом на выходе"];
@@ -193,7 +190,7 @@ const E27_GOAL_M={DANIIL:15,ADRIAN:12};
    ИГРОКА ДО МОМЕНТА УДАРА. Не от касания мяча и не до пересечения линии.
    Выводится текстом на экране замера каждого такого упражнения. */
 const BALL_WATCH_RULE="Пуск — старт. Стоп — удар.";
-const BALL_TIMED=["E04","E19","E20","E27","E15"];
+const BALL_TIMED=["E04","E05","E19","E27","E15"];
 // Упражнение с мячом, где секундомер идёт от старта игрока до удара.
 function ballTimed(ex){ return BALL_TIMED.indexOf(ex)>=0; }
 // Ограничение выводится на экран упражнения (dupl. bot/catalog.E17_WARNING).
@@ -233,7 +230,6 @@ const REST={
   // Режим 2.
   E18:120,
   E19:{DANIIL:15,ADRIAN:25},
-  E20:90,
   E22:60,
   E24:75,
   E25:30,
@@ -286,7 +282,7 @@ const REPS={E01:{DANIIL:6,ADRIAN:5},E02:{DANIIL:6,ADRIAN:5},E04:{DANIIL:6,ADRIAN
 const REPS2={E04:{DANIIL:5,ADRIAN:5},
   E18:{DANIIL:E18_REPS.DANIIL,ADRIAN:E18_REPS.ADRIAN},
   E19:{DANIIL:E19_REPS.DANIIL,ADRIAN:E19_REPS.ADRIAN},
-  E20:{DANIIL:E20_REPS,ADRIAN:E20_REPS},
+  E05:{DANIIL:5,ADRIAN:5},
   E22:{DANIIL:E22_REPS,ADRIAN:E22_REPS},
   E23:{DANIIL:E23_ROUNDS,ADRIAN:E23_ROUNDS},
   E24:{DANIIL:6,ADRIAN:6},
@@ -309,7 +305,7 @@ function repsCount(ex,pl){
 const LIGHT_REPS={E01:3,E02:0,E04:2,E05:2,E06:3,E07:4,E10S:2,E15:2,
   E17:{DANIIL:2,ADRIAN:1},
   // Режим 2.
-  E18:{DANIIL:3,ADRIAN:2},E19:{DANIIL:4,ADRIAN:3},E20:2,E22:2,
+  E18:{DANIIL:3,ADRIAN:2},E19:{DANIIL:4,ADRIAN:3},E22:2,
   E23:1,E24:3,E25:{DANIIL:E25_LIGHT.DANIIL,ADRIAN:E25_LIGHT.ADRIAN},
   E27:2,E03:4};
 const LIGHT_RECEPTIONS=2;    // «Приём под опекой» во все дни
@@ -328,7 +324,7 @@ function lightTag(pl){ return isLight(pl)?" · облегчённый":""; }
 const EX_UNIT={E01:N_RUN,E02:N_RUN,E04:N_PASS,E05:N_PASS,E06:N_REP,E10S:N_REP,
   E07:N_CATCH,E10:(n)=>nOf(n,"удар","удара","ударов"),E12:N_TRY,E14:N_TRY,
   E13:N_CATCH,E15:N_REP,E08:N_ATT,E17:N_TRY,
-  E18:N_RUN,E19:(n)=>nOf(n,"рывок","рывка","рывков"),E20:N_REP,
+  E18:N_RUN,E19:(n)=>nOf(n,"рывок","рывка","рывков"),
   E22:N_TRY,E23:(n)=>nOf(n,"круг","круга","кругов"),E24:N_REP,
   E25:N_REP,E26:(n)=>nOf(n,"отрезок","отрезка","отрезков"),E27:N_REP,
   E03:(n)=>nOf(n,"вариант","варианта","вариантов")};
@@ -473,7 +469,7 @@ const MODE1_MATRIX={
 };
 const MODE2_MATRIX={
   MON:["Максимальная скорость",[["E18",16,11],["E01",11,8],["E06",12,9],["E17",6,5]]],
-  TUE:["Повторные рывки",[["E04",13,9],["E19",20,14],["E20",12,7]]],
+  TUE:["Повторные рывки",[["E04",13,9],["E19",20,14],["E05",13,9]]],
   WED:["Агилити и техника бега",[["E03",10,7],["E22",12,9],["E23",12,7],["E14",15,10]]],
   THU:["Скорость и смена направления",[["E18",16,11],["E24",14,8],["E25",16,10],["E17",6,5]]],
   FRI:["Игровая выносливость",[["E15",10,7],["E26",18,10],["E27",12,7],["E13",18,13]]],
@@ -598,7 +594,6 @@ function e02Biweekly(iso){const diff=Math.round((isoToDate(iso)-isoToDate("2026-
 const MARKUP_SNIPPET = {
   E18:()=>`Три фишки: 0 — старт, ${E18_RUNUP_M} м — пуск, дальше ${DIST.E18.DANIIL} м Даниилу и ${DIST.E18.ADRIAN} м Адриану — стоп.\nДорожка ${E18_RUNUP_M+DIST.E18.DANIIL} / ${E18_RUNUP_M+DIST.E18.ADRIAN} м, ты у последней фишки. Отдых ${REST.E18} сек.`,
   E19:()=>`Старт в ${DIST.E19.DANIIL} м от ворот (Адриану ${DIST.E19.ADRIAN} м), мяч у игрока, ты у ворот.\nРывок с мячом и удар, назад шагом. Отдых ${REST.E19.DANIIL} / ${REST.E19.ADRIAN} сек.`,
-  E20:()=>`Прямая без фишек: ${DIST.E20.DANIIL} м Даниилу, ${DIST.E20.ADRIAN} м Адриану. Ворота, ты у ворот.\nВедение на скорости, удар у штрафной. Отдых ${REST.E20} сек.`,
   E03:()=>`Лестница и ${E03_ACCEL_M} м свободного места за ней для ускорения.\n${nOf(E03_DRILLS.length,"вариант","варианта","вариантов")} по ${E03_DRILL_SEC} сек, замера нет.`,
   E22:()=>`Центральная фишка и ${E22_POINTS} пронумерованных по кругу: радиус ${DIST.E22.DANIIL} м (Адриану ${DIST.E22.ADRIAN} м).\nТы рядом с центром, называешь номера. Отдых ${REST.E22} сек между подходами.`,
   E23:()=>`Отрезок ${E23_LEG_M} м, фишки на старте и на финише, обратно шагом.\n${E23_DRILLS.length} упражнения в круге, ${nOf(E23_ROUNDS,"круг","круга","кругов")}. Замера нет.`,
@@ -975,6 +970,7 @@ E05:{ name:"Зигзаг с мячом", type:"time_goal", stopT:0.60,
     `Рывок после последней фишки: Даниилу ${RUSH.DANIIL} м, Адриану ${RUSH.ADRIAN} м — та же фишка удара, что в слаломе.`,
     `${N_PASS(repsOf("E05","DANIIL",spec))} каждому.`],
   reps_text:(spec)=>`${N_PASS(repsOf("E05","DANIIL",spec))} каждому.`,
+  watchNote:BALL_WATCH_RULE,
   why:`Ширина ${E05_SIDE.DANIIL} м при длине ${DIST.E05.DANIIL} даёт угол ~105° — резкий разворот на опорной ноге. Уже — широкий слалом, шире — остановка.`,
   hint:"Зигзаг сразу после слалома — сознательно: техника отрабатывается на подсевших ногах, как в матче.",
   smotri:"Плечо уходит первым, мяч за ним. Разворот одним движением, не тремя шажками.",
@@ -1211,31 +1207,6 @@ E19:{ name:"Повторные рывки с мячом", type:"time_goal", fade
   diff:{DANIIL:`${DIST.E19.DANIIL} м, ${E19_REPS.DANIIL} рывков через ${REST.E19.DANIIL} сек.`,
         ADRIAN:`${DIST.E19.ADRIAN} м, ${E19_REPS.ADRIAN} рывков через ${REST.E19.ADRIAN} сек: отдых длиннее, иначе серия рассыпается со второго рывка.`},
   rec:"Время и гол каждого рывка. Падение первого к последнему приложение считает само.",
-},
-E20:{ name:"Ведение на скорость", type:"time_goal", stopT:0.60,
-  setup:()=>`Прямая без фишек.\nДаниил стартует в ${DIST.E20.DANIIL} м от ворот, Адриан в ${DIST.E20.ADRIAN} м.\nТы у ворот.`,
-  svg:()=>{const k=mScale(DIST.E20.DANIIL,205), x0=25, xGoal=x0+DIST.E20.DANIIL*k;
-    const xa=x0+(DIST.E20.DANIIL-DIST.E20.ADRIAN)*k;
-    return svg(
-      goalV(xGoal,80)+
-      player(x0,48,"Даниил")+ball(x0+11,54)+arrow(x0+13,48,xGoal-10,70)+
-      player(xa,106,"Адриан")+ball(xa+11,112)+arrow(xa+13,104,xGoal-10,94)+
-      lblC((x0+xGoal)/2,32,"ведение по прямой, удар у штрафной")+
-      dim(x0,126,xGoal,DIST.E20.DANIIL+" м")+
-      dim(xa,148,xGoal,DIST.E20.ADRIAN+" м")+
-      coach(xGoal+28,80,"ТЫ"));},
-  steps:(spec)=>["Ведёт мяч по прямой на максимальной скорости.",
-    "У линии штрафной бьёт.",
-    `${N_REP(repsCount("E20","DANIIL"))} каждому, отдых ${REST.E20} секунд.`,
-    "СЕКУНДОМЕР: пуск — старт, стоп — удар. После каждого повтора спросим гол."],
-  reps_text:(spec)=>`${N_REP(repsOf("E20","DANIIL",spec||S.spec))} каждому, отдых ${REST.E20} сек.\nДаниил ${DIST.E20.DANIIL} м, Адриан ${DIST.E20.ADRIAN} м. Время и гол каждого повтора.`,
-  watchNote:BALL_WATCH_RULE,
-  smotri:"Мяч отпускается на 3-4 метра вперёд, не катится в ногах. Голова поднимается хотя бы раз.",
-  oshibka:"Мяч в ногах — тогда это не ведение на скорости, а бег с мячом под ногами.",
-  pravilno:"Длина касания такая, что за мячом приходится бежать, а не догонять его шагом.",
-  match:"Скорость с мячом на прямой, без обводки — контратака по пустому флангу.",
-  diff:{DANIIL:`${DIST.E20.DANIIL} м до удара.`,ADRIAN:`${DIST.E20.ADRIAN} м до удара.`},
-  rec:"Время и гол каждого повтора.",
 },
 E03:{ name:"Координационная лестница", type:"drills",
   drills:()=>E03_DRILLS, drillSec:()=>E03_DRILL_SEC,
@@ -1475,8 +1446,10 @@ function repsFor(code,spec){
       slot(pl,"E04","",DIST.E04[pl],i+1,REST.E04[pl],{goal:true}));
     push("DANIIL",e04("DANIIL")); push("ADRIAN",e04("ADRIAN"));
   } else if(code==="E05"){
-    push("DANIIL",[1,2,3,4,5,6].map(n=>slot("DANIIL","E05","",DIST.E05.DANIIL,n,REST.E05.DANIIL,{goal:true})));
-    push("ADRIAN",[1,2,3,4,5,6].map(n=>slot("ADRIAN","E05","",DIST.E05.ADRIAN,n,REST.E05.ADRIAN,{goal:true})));
+    // В режиме 2 зигзаг идёт на 5 проходов вместо шести (repsCount).
+    const e05=(pl)=>Array.from({length:repsCount("E05",pl)},(_,i)=>
+      slot(pl,"E05","",DIST.E05[pl],i+1,REST.E05[pl],{goal:true}));
+    push("DANIIL",e05("DANIIL")); push("ADRIAN",e05("ADRIAN"));
   } else if(code==="E10S"){
     const nn=e10sReps(spec);  // 6 повторов во все дни
     push("DANIIL",Array.from({length:nn},(_,i)=>slot("DANIIL","E10S","",DIST.E10S.DANIIL,i+1,REST.E10S,{goal:true})));
@@ -1498,10 +1471,6 @@ function repsFor(code,spec){
     const e19=(pl)=>Array.from({length:repsCount("E19",pl)},(_,i)=>
       slot(pl,"E19","",DIST.E19[pl],i+1,REST.E19[pl],{goal:true,noStop:true}));
     push("DANIIL",e19("DANIIL")); push("ADRIAN",e19("ADRIAN"));
-  } else if(code==="E20"){
-    const e20=(pl)=>Array.from({length:repsCount("E20",pl)},(_,i)=>
-      slot(pl,"E20","",DIST.E20[pl],i+1,REST.E20,{goal:true}));
-    push("DANIIL",e20("DANIIL")); push("ADRIAN",e20("ADRIAN"));
   } else if(code==="E24"){
     // Три повтора через правое плечо, потом три через левое: счёт раздельный.
     const e24=(pl)=>{const out=[]; let n=0;
@@ -3051,7 +3020,7 @@ function fadeLines(list){
 // Чистые удары по воротам: только они идут в «Всего ударов». Единоборства
 // тоже кончаются ударом, но упражнение там про обыгрыш и отбор — их процент
 // считается своим блоком (dupl. bot/insights.py SHOT_EXERCISES).
-const SHOT_EXERCISES=["E10","E10S","E07","E15","E19","E20","E27"];
+const SHOT_EXERCISES=["E10","E10S","E07","E15","E19","E27"];
 function shotsTotal(byEx){
   let g=0,s=0;
   SHOT_EXERCISES.forEach(ex=>{ const t=goalsOf(byEx[ex]||[]); g+=t.g; s+=t.s; });
