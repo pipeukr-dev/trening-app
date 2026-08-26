@@ -48,6 +48,10 @@ button:disabled{opacity:.4}
 .grid5 button{min-height:56px;font-size:22px}
 .gridN{display:flex;flex-wrap:wrap;gap:6px}
 .gridN button{min-height:52px;flex:1 0 26%}
+/* Ввод дистанции по фишкам: ровно четыре в ряд, покрупнее и поплотнее —
+   у «Интервалов 30-30» кнопок двадцать три. */
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}
+.grid4 button{min-height:48px;font-size:22px;padding:4px 0}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;
   align-items:center;justify-content:center;padding:16px;z-index:50}
 .overlay .card{max-width:480px;width:100%;max-height:90vh;overflow-y:auto}
@@ -89,7 +93,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260827-0141-b5c1771';
+const BUILD = '20260827-0155-6a694b4';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -183,13 +187,16 @@ const E24_SUBS=[{v:"turn_right",side:"через правое плечо",reps:3
 // «Интервалы 30-30» (E25) и «Интервалы с мячом 15-15» (E26).
 const E25_WORK_SEC=30, E25_REST_SEC=30;
 /* Дорожка с фишками через 5 м: по ним тренер вводит, докуда добежал игрок.
-   Остановился между фишками — округляем до ближайшей (dupl. bot/catalog). */
+   ДИАПАЗОН ПОДОБРАН РАСЧЁТОМ по фактическим замерам (27.08): Даниил 20 м
+   за 2.86 с (~7 м/с), за 30 секунд на высокой скорости ~150-190 м; Адриан
+   ~110-150 м. Взят с запасом в обе стороны. До этого стояло 30-100 м —
+   столько пробегают секунд за пятнадцать (dupl. bot/catalog). */
 const E25_CONE_STEP=5, E25_MARKS=[];
-for(let m=30;m<=100;m+=E25_CONE_STEP)E25_MARKS.push(m);
+for(let m=90;m<=200;m+=E25_CONE_STEP)E25_MARKS.push(m);
 const E25_REPS={DANIIL:10,ADRIAN:8}, E25_LIGHT={DANIIL:6,ADRIAN:5};
 const E26_WORK_SEC=15, E26_REST_SEC=15, E26_BREAK_SEC=180;
 const E26_CONE_STEP=5, E26_MARKS=[];
-for(let m=15;m<=50;m+=E26_CONE_STEP)E26_MARKS.push(m);
+for(let m=40;m<=100;m+=E26_CONE_STEP)E26_MARKS.push(m);
 /* Падение дистанции: первый интервал против последнего, в метрах
    и процентах (dupl. bot/catalog.INTERVAL_FADE_*). */
 const INTERVAL_WARN_SEC=5;
@@ -197,6 +204,8 @@ const INTERVAL_FADE_GOOD=10, INTERVAL_FADE_BAD=20;
 const INTERVAL_FADE_VERDICTS={hold:"держит темп всю серию",edge:"на границе",
   fade:"садится, выносливости не хватает"};
 const INTERVAL_MARKS={E25:E25_MARKS,E26:E26_MARKS};
+// Диапазон посчитан, а не измерен: после первого занятия его надо сверить.
+const INTERVAL_RANGE_NOTE="Диапазон фишек подобран расчётом. После первого занятия сверь с фактом — если добегают до последней фишки или не доходят до первой, диапазон нужно сдвинуть.";
 const E26_SERIES={DANIIL:[6,6],ADRIAN:[5,5]};
 const E26_LIGHT_SERIES={DANIIL:[6],ADRIAN:[5]};
 // «Челнок с мячом» (E27): ворота в стороне от линии фишек.
@@ -621,8 +630,8 @@ const MARKUP_SNIPPET = {
   E22:()=>`Центральная фишка и ${E22_POINTS} пронумерованных по кругу: радиус ${DIST.E22.DANIIL} м (Адриану ${DIST.E22.ADRIAN} м).\nТы рядом с центром, называешь номера. Отдых ${REST.E22} сек между подходами.`,
   E23:()=>`Отрезок ${E23_LEG_M} м, фишки на старте и на финише, обратно шагом.\nКруг = ${E23_DRILLS.length} упражнений подряд по ${E23_LEG_M} м; всего ${nOf(E23_ROUNDS,"круг","круга","кругов")}, между ними отдыха нет.\nОба одновременно, замера нет.`,
   E24:()=>`Три фишки: старт, вторая через ${DIST.E24.DANIIL} м (Адриану ${DIST.E24.ADRIAN} м), третья в ${E24_BACK_M} м за спиной от старта.\nТы у третьей фишки. Отдых ${REST.E24} сек.`,
-  E25:()=>`Прямая вдоль поля: фишки через ${E25_CONE_STEP} м от ${E25_MARKS[0]} до ${E25_MARKS[E25_MARKS.length-1]} м (${E25_MARKS.length} фишек), старт от нуля.\n${E25_WORK_SEC} сек бега и ${E25_REST_SEC} сек шагом обратно, оба одновременно.\nПишем дистанцию по фишкам; ты сбоку, видишь всю дорожку.`,
-  E26:()=>`Прямая вдоль поля: фишки через ${E26_CONE_STEP} м от ${E26_MARKS[0]} до ${E26_MARKS[E26_MARKS.length-1]} м (${E26_MARKS.length} фишек), ворота в конце дорожки.\n${E26_WORK_SEC} сек ведения и ${E26_REST_SEC} сек шагом, две серии через ${E26_BREAK_SEC/60} мин.\nПишем дистанцию по фишкам; на финише серии — удар.`,
+  E25:()=>`Прямая вдоль поля: фишки через ${E25_CONE_STEP} м от ${E25_MARKS[0]} до ${E25_MARKS[E25_MARKS.length-1]} м (${nOf(E25_MARKS.length,"фишка","фишки","фишек")}), старт от нуля.\n${E25_WORK_SEC} сек бега и ${E25_REST_SEC} сек шагом обратно, оба одновременно.\nПишем дистанцию по фишкам; ты сбоку, видишь всю дорожку.`,
+  E26:()=>`Прямая вдоль поля: фишки через ${E26_CONE_STEP} м от ${E26_MARKS[0]} до ${E26_MARKS[E26_MARKS.length-1]} м (${nOf(E26_MARKS.length,"фишка","фишки","фишек")}), ворота в конце дорожки.\n${E26_WORK_SEC} сек ведения и ${E26_REST_SEC} сек шагом, две серии через ${E26_BREAK_SEC/60} мин.\nПишем дистанцию по фишкам; на финише серии — удар.`,
   E27:()=>`Три фишки в линию через ${DIST.E27.DANIIL} м (Адриану ${DIST.E27.ADRIAN} м), старт от средней.\nВорота в ${E27_GOAL_M.DANIIL} м от линии (Адриану ${E27_GOAL_M.ADRIAN} м), ты у ворот. Отдых ${REST.E27} сек.`,
   E17:(spec)=>`${N_TRY(repsOf("E17","DANIIL",spec))} каждому по ${E17_JUMPS.DANIIL}/${E17_JUMPS.ADRIAN} прыжка.\nТот же коридор ${DIST.E17.DANIIL} м, что у «Стартов» — фишки ставятся один раз.\nЗамер только бега после последнего прыжка, отдых ${REST.E17} сек.`,
   E01:()=>`Даниил: 2 фишки на ${DIST.E01.DANIIL} м — его коридор.\nАдриан: рядом в ${E01_LANE_GAP} м, 2 фишки на ${DIST.E01.ADRIAN} м.\nСтарты по очереди, ты на общем финише.`,
@@ -739,18 +748,26 @@ function svg(inner){
    Подписаны первая, последняя и каждая третья — иначе цифры сливаются.
    goalLabel — если в конце дорожки стоят ворота. */
 function trackSvg(marks,step,goalLabel){
-  const first=marks[0], last=marks[marks.length-1];
-  const x0=22, xEnd=goalLabel?244:282, k=(xEnd-x0)/last;
+  /* Фишек может быть больше двадцати — рисовать все бессмысленно, они
+     сольются. Показываем первые три, многоточие и последние три
+     с подписанными метрами: тренеру важен диапазон и шаг. */
+  const n=marks.length, head=marks.slice(0,3), tail=marks.slice(-3);
+  const x0=20, xEnd=goalLabel?236:274;
+  const slots=head.length+1+tail.length;          // +1 на многоточие
+  const at=(i)=>x0+ (xEnd-x0)*i/(slots-1);
   let inner=`<line x1="${x0}" y1="86" x2="${xEnd}" y2="86" stroke="#888" stroke-width="1"/>`;
-  inner+=cone(x0,86)+lblC(x0,110,"0")+lblC(x0,52,"старт");
-  marks.forEach((m,i)=>{ const x=x0+m*k;
-    inner+=cone(x,86);
-    if(i===0||i===marks.length-1||i%3===0) inner+=lblC(x,110,String(m));
-  });
-  inner+=arrow(x0+10,68,xEnd-8,68)+lblC((x0+xEnd)/2,58,`фишки через ${step} м`);
-  inner+=arrow(xEnd-8,132,x0+10,132)+lblC((x0+xEnd)/2,150,"обратно шагом к старту");
-  if(goalLabel) inner+=goalV(xEnd+10,86);
-  else inner+=coach(x0+8,26,"ТЫ");
+  head.forEach((m,i)=>{ inner+=cone(at(i),86)+lblC(at(i),112,String(m)); });
+  const xd=at(head.length);
+  inner+=lblC(xd,92,"· · ·");
+  tail.forEach((m,i)=>{ const x=at(head.length+1+i);
+    inner+=cone(x,86)+lblC(x,112,String(m)); });
+  inner+=lblC(x0+16,52,"старт от 0")
+    +lblC(xd,132,`${nOf(n,"фишка","фишки","фишек")} через ${step} м`);
+  inner+=arrow(x0+10,68,xEnd-8,68);
+  inner+=arrow(xEnd-8,148,x0+10,148)+lblC((x0+xEnd)/2,164,"обратно шагом к старту");
+  // Тренер стоит сбоку и видит всю дорожку — в обоих вариантах.
+  if(goalLabel) inner+=goalV(xEnd+12,86);
+  inner+=coach(x0+6,26,"ТЫ");
   return svg(inner);
 }
 // Масштаб: сколько пикселей в метре, чтобы totalM уложились в px.
@@ -1360,7 +1377,7 @@ E24:{ name:"Разворот на 180°", type:"time", stopT:0.30,
 },
 E25:{ name:"Интервалы 30-30", type:"intervals",
   work:()=>E25_WORK_SEC, restSec:()=>E25_REST_SEC, ball:false,
-  setup:()=>`Прямая вдоль поля. Фишки через каждые ${E25_CONE_STEP} метров, от ${E25_MARKS[0]} до ${E25_MARKS[E25_MARKS.length-1]} метров — итого ${E25_MARKS.length} фишек.\nИгроки стартуют от нулевой отметки и бегут в одну сторону.\nТы стоишь сбоку и видишь всю дорожку.`,
+  setup:()=>`Прямая вдоль поля. Фишки через каждые ${E25_CONE_STEP} метров, от ${E25_MARKS[0]} до ${E25_MARKS[E25_MARKS.length-1]} метров — итого ${nOf(E25_MARKS.length,"фишка","фишки","фишек")}.\nИгроки стартуют от нулевой отметки и бегут в одну сторону.\nТы стоишь сбоку и видишь всю дорожку.`,
   svg:()=>trackSvg(E25_MARKS,E25_CONE_STEP,null),
   steps:(spec)=>[`${E25_WORK_SEC} секунд бега на высокой скорости — примерно 80% от максимума, НЕ спринт.`,
     "По сигналу приложения останавливаются ТАМ, ГДЕ ДОБЕЖАЛИ.",
@@ -1368,8 +1385,10 @@ E25:{ name:"Интервалы 30-30", type:"intervals",
     `Даниил ${N_REP(intervalReps("E25","DANIIL"))}, Адриан ${N_REP(intervalReps("E25","ADRIAN"))}. Оба бегут ОДНОВРЕМЕННО, не по очереди.`,
     `ЗАМЕР — ДИСТАНЦИЯ, а не время: после каждого отрезка приложение спросит, до какой фишки добежал каждый. Остановился между фишками — округляй до ближайшей.`,
     `Таймер приложение ведёт само: сигнал за ${INTERVAL_WARN_SEC} секунд до смены и длинный в момент смены. Засекать ничего не нужно — только ввести метры.`,
-    "Показатель — падение дистанции от первого интервала к последнему: держит ли темп всю серию."],
+    "Показатель — падение дистанции от первого интервала к последнему: держит ли темп всю серию.",
+    INTERVAL_RANGE_NOTE],
   reps_text:(spec)=>`${PLAYERS.map(pl=>`${RU[pl]}: ${N_REP(intervalReps("E25",pl))}`).join("\n")}\n${E25_WORK_SEC} сек бега на ~80% и ${E25_REST_SEC} сек шагом обратно. Оба одновременно.\nПишем дистанцию по фишкам (${E25_MARKS[0]}-${E25_MARKS[E25_MARKS.length-1]} м через ${E25_CONE_STEP}), времени нет.`,
+  why:`За ${E25_WORK_SEC} секунд на высокой, но не предельной скорости Даниил пробегает примерно 150-190 м, Адриан 110-150. Отсюда диапазон фишек ${E25_MARKS[0]}-${E25_MARKS[E25_MARKS.length-1]} м, взятый с запасом в обе стороны.`,
   smotri:"Темп ровный от первого отрезка к последнему: дистанция не должна падать. Дыхание восстанавливается за шаговые 30 секунд.",
   oshibka:"Первые отрезки на максимум — тогда последние идут пешком, и объём не набирается.",
   pravilno:"Последний отрезок такой же, как первый.",
@@ -1379,15 +1398,17 @@ E25:{ name:"Интервалы 30-30", type:"intervals",
 },
 E26:{ name:"Интервалы с мячом 15-15", type:"intervals",
   work:()=>E26_WORK_SEC, restSec:()=>E26_REST_SEC, ball:true, series:true,
-  setup:()=>`Прямая вдоль поля. Фишки через каждые ${E26_CONE_STEP} метров, от ${E26_MARKS[0]} до ${E26_MARKS[E26_MARKS.length-1]} метров — итого ${E26_MARKS.length} фишек.\nВорота в конце дорожки. Мяч у каждого свой. Ты сбоку, видишь всю дорожку.`,
+  setup:()=>`Прямая вдоль поля. Фишки через каждые ${E26_CONE_STEP} метров, от ${E26_MARKS[0]} до ${E26_MARKS[E26_MARKS.length-1]} метров — итого ${nOf(E26_MARKS.length,"фишка","фишки","фишек")}.\nВорота в конце дорожки. Мяч у каждого свой. Ты сбоку, видишь всю дорожку.`,
   svg:()=>trackSvg(E26_MARKS,E26_CONE_STEP,"ворота"),
   steps:(spec)=>[`${E26_WORK_SEC} секунд ведения мяча на высокой скорости, ${E26_REST_SEC} секунд шагом обратно с мячом.`,
     "Разбито на серии: "+PLAYERS.map(pl=>`${RU[pl]} `+e26Series(pl).join(" и ")).join(", ")+`. Между сериями ${E26_BREAK_SEC/60} минуты.`,
     "ПОСЛЕДНИЙ ОТРЕЗОК КАЖДОЙ СЕРИИ заканчивается рывком к воротам и ударом — там вместо дистанции спрашиваем гол.",
     `ЗАМЕР — ДИСТАНЦИЯ по фишкам: после каждого отрезка приложение спросит, до какой фишки добежал каждый. Между фишками — округляй до ближайшей.`,
     `Таймер приложение ведёт само: сигнал за ${INTERVAL_WARN_SEC} секунд до смены и длинный в момент смены.`,
-    "Оба работают одновременно, не по очереди."],
+    "Оба работают одновременно, не по очереди.",
+    INTERVAL_RANGE_NOTE],
   reps_text:(spec)=>`${PLAYERS.map(pl=>`${RU[pl]}: ${e26Series(pl).join(" + ")} = ${N_REP(intervalReps("E26",pl))}`).join("\n")}\n${E26_WORK_SEC} сек ведения и ${E26_REST_SEC} сек шагом, между сериями ${E26_BREAK_SEC/60} мин.\nПишем дистанцию по фишкам (${E26_MARKS[0]}-${E26_MARKS[E26_MARKS.length-1]} м через ${E26_CONE_STEP}); на финише серии — удар и гол.`,
+  why:`Ведение с мячом медленнее чистого бега: за ${E26_WORK_SEC} секунд это примерно 60-90 м у Даниила и 45-70 у Адриана. Отсюда и диапазон фишек ${E26_MARKS[0]}-${E26_MARKS[E26_MARKS.length-1]} м.`,
   smotri:"Мяч не убегает на шаговых отрезках — контроль держится и на уставших ногах.",
   oshibka:"К третьему отрезку бросает мяч и просто бежит рядом.",
   pravilno:"Последний удар серии такой же чистый, как если бы он был первым.",
@@ -2372,8 +2393,9 @@ function ivAsk(){
   const marks=INTERVAL_MARKS[iv.ex]||[];
   h(`${head}
     <div class="title">До какой фишки добежал?</div>
-    <div class="gridN">${marks.map(m=>`<button onclick="ivDistSave('${pl}',${m})">${m}</button>`).join("")}</div>
+    <div class="grid4">${marks.map(m=>`<button onclick="ivDistSave('${pl}',${m})">${m}</button>`).join("")}</div>
     <div class="note">Остановился между фишками — округляй до ближайшей.</div>
+    <div class="note">${INTERVAL_RANGE_NOTE}</div>
     ${smallActions()}`);
 }
 function ivDistSave(pl,m){
