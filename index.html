@@ -93,7 +93,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260827-0155-6a694b4';
+const BUILD = '20260827-1710-0701210';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -204,13 +204,25 @@ const INTERVAL_FADE_GOOD=10, INTERVAL_FADE_BAD=20;
 const INTERVAL_FADE_VERDICTS={hold:"держит темп всю серию",edge:"на границе",
   fade:"садится, выносливости не хватает"};
 const INTERVAL_MARKS={E25:E25_MARKS,E26:E26_MARKS};
-// Диапазон посчитан, а не измерен: после первого занятия его надо сверить.
+/* Диапазон посчитан, а не измерен: после первого занятия его надо сверить.
+   У «Интервалов 30-30» сверка проведена 27.08 — Даниил добегает до 190-195 м,
+   диапазон до 200 подходит, и строки там больше нет. Осталась у «Интервалов
+   с мячом»: их ещё не проверяли на поле. */
 const INTERVAL_RANGE_NOTE="Диапазон фишек подобран расчётом. После первого занятия сверь с фактом — если добегают до последней фишки или не доходят до первой, диапазон нужно сдвинуть.";
 const E26_SERIES={DANIIL:[6,6],ADRIAN:[5,5]};
 const E26_LIGHT_SERIES={DANIIL:[6],ADRIAN:[5]};
 // «Челнок с мячом» (E27): ворота в стороне от линии фишек.
 const E27_REPS=4;
 const E27_GOAL_M={DANIIL:15,ADRIAN:12};
+/* «Удары с места» (E28) — последний блок четверга режима 2. Мяч лежит,
+   отдыха между ударами нет: после интервалов 30-30 это восстановление
+   и работа над ударом на уставших ногах (dupl. bot/catalog.py). */
+const E28_SHOTS=15, E28_LIGHT_SHOTS=8;
+/* Идут одной подсерией: подряд, без сторон. Тип работы общий с «Разворотом»,
+   поэтому список подсерий берётся у упражнения (subsOf). */
+const E28_SUBS=[{v:"",side:"с места",label:"мяч лежит, бьёт с места"}];
+const E28_DIST={DANIIL:14,ADRIAN:12};
+const E28_RANGE={DANIIL:"14-15 м",ADRIAN:"11-14 м"};
 /* ЕДИНОЕ ПРАВИЛО ЗАМЕРА В УПРАЖНЕНИЯХ С МЯЧОМ: секундомер идёт ОТ СТАРТА
    ИГРОКА ДО МОМЕНТА УДАРА. Не от касания мяча и не до пересечения линии.
    Выводится текстом на экране замера каждого такого упражнения. */
@@ -352,7 +364,8 @@ const EX_UNIT={E01:N_RUN,E02:N_RUN,E04:N_PASS,E05:N_PASS,E06:N_REP,E10S:N_REP,
   E18:N_RUN,E19:(n)=>nOf(n,"рывок","рывка","рывков"),
   E22:N_TRY,E23:(n)=>nOf(n,"круг","круга","кругов"),E24:N_REP,
   E25:N_REP,E26:(n)=>nOf(n,"отрезок","отрезка","отрезков"),E27:N_REP,
-  E03:(n)=>nOf(n,"вариант","варианта","вариантов")};
+  E03:(n)=>nOf(n,"вариант","варианта","вариантов"),
+  E28:(n)=>nOf(n,"удар","удара","ударов")};
 // Число отрезков интервального упражнения у игрока.
 function intervalReps(ex,pl){
   if(ex==="E25")return isLight(pl)?E25_LIGHT[pl]:E25_REPS[pl];
@@ -442,6 +455,19 @@ function countdownTo(targetMs,elId,onDone,opts){
   tick(); cdTimer=setInterval(tick,200);
 }
 
+/* Счётчик ВВЕРХ: время отдыха без ограничения. Останавливается общим
+   stopScreenTimers() при отрисовке следующего экрана. */
+function countUpFrom(startMs,elId){
+  stopCountdown();
+  const tick=()=>{
+    const el=document.getElementById(elId);
+    if(!el){ stopCountdown(); return; }
+    const sec=Math.max(0,Math.round((Date.now()-startMs)/1000));
+    el.textContent=`${Math.floor(sec/60)}:${String(sec%60).padStart(2,"0")}`;
+  };
+  tick(); cdTimer=setInterval(tick,1000);
+}
+
 /* ---------- Часы и абсолютное время ---------- */
 function hhmm(dt){ return String(dt.getHours()).padStart(2,"0")+":"+String(dt.getMinutes()).padStart(2,"0"); }
 function hhmmss(dt){ return hhmm(dt)+":"+String(dt.getSeconds()).padStart(2,"0"); }
@@ -501,9 +527,9 @@ const MODE1_MATRIX={
 };
 const MODE2_MATRIX={
   MON:["Максимальная скорость",[["E18",16,11],["E01",11,8],["E06",12,9],["E17",6,5]]],
-  TUE:["Повторные рывки",[["E04",13,9],["E19",20,14],["E05",13,9]]],
+  TUE:["Повторные рывки",[["E17",6,5],["E04",13,9],["E19",20,14],["E05",13,9]]],
   WED:["Агилити и техника бега",[["E03",10,7],["E22",12,9],["E23",12,7],["E14",15,10]]],
-  THU:["Скорость и смена направления",[["E18",16,11],["E24",14,8],["E25",16,10],["E17",6,5]]],
+  THU:["Скорость и смена направления",[["E18",16,11],["E24",14,8],["E25",16,10],["E28",10,7]]],
   FRI:["Игровая выносливость",[["E15",10,7],["E26",18,10],["E27",12,7],["E13",18,13]]],
 };
 const DAY_MATRIX={1:MODE1_MATRIX,2:MODE2_MATRIX};
@@ -585,6 +611,7 @@ function plannedReps(ex,spec,pl){
   if(ex==="E03")return isLight(pl)?LIGHT_REPS.E03:E03_DRILLS.length;
   if(ex==="E23")return isLight(pl)?LIGHT_REPS.E23:E23_ROUNDS;
   if(ex==="E22")return isLight(pl)?lightReps("E22",pl):repsCount("E22",pl);
+  if(ex==="E28")return shotsPerSub("E28",pl);
   if(ex==="E25")return intervalReps("E25",pl);
   if(ex==="E26")return e26Series(pl).reduce((a,b)=>a+b,0);
   const plan=repsFor(ex,spec);
@@ -630,9 +657,10 @@ const MARKUP_SNIPPET = {
   E22:()=>`Центральная фишка и ${E22_POINTS} пронумерованных по кругу: радиус ${DIST.E22.DANIIL} м (Адриану ${DIST.E22.ADRIAN} м).\nТы рядом с центром, называешь номера. Отдых ${REST.E22} сек между подходами.`,
   E23:()=>`Отрезок ${E23_LEG_M} м, фишки на старте и на финише, обратно шагом.\nКруг = ${E23_DRILLS.length} упражнений подряд по ${E23_LEG_M} м; всего ${nOf(E23_ROUNDS,"круг","круга","кругов")}, между ними отдыха нет.\nОба одновременно, замера нет.`,
   E24:()=>`Три фишки: старт, вторая через ${DIST.E24.DANIIL} м (Адриану ${DIST.E24.ADRIAN} м), третья в ${E24_BACK_M} м за спиной от старта.\nТы у третьей фишки. Отдых ${REST.E24} сек.`,
-  E25:()=>`Прямая вдоль поля: фишки через ${E25_CONE_STEP} м от ${E25_MARKS[0]} до ${E25_MARKS[E25_MARKS.length-1]} м (${nOf(E25_MARKS.length,"фишка","фишки","фишек")}), старт от нуля.\n${E25_WORK_SEC} сек бега и ${E25_REST_SEC} сек шагом обратно, оба одновременно.\nПишем дистанцию по фишкам; ты сбоку, видишь всю дорожку.`,
+  E25:()=>`Прямая вдоль поля: фишки через ${E25_CONE_STEP} м от ${E25_MARKS[0]} до ${E25_MARKS[E25_MARKS.length-1]} м (${nOf(E25_MARKS.length,"фишка","фишки","фишек")}), старт от нуля.\n${E25_WORK_SEC} сек бега, потом шагом обратно — запуск каждого отрезка ручной.\nПишем дистанцию по фишкам; ты сбоку, видишь всю дорожку.`,
   E26:()=>`Прямая вдоль поля: фишки через ${E26_CONE_STEP} м от ${E26_MARKS[0]} до ${E26_MARKS[E26_MARKS.length-1]} м (${nOf(E26_MARKS.length,"фишка","фишки","фишек")}), ворота в конце дорожки.\n${E26_WORK_SEC} сек ведения и ${E26_REST_SEC} сек шагом, две серии через ${E26_BREAK_SEC/60} мин.\nПишем дистанцию по фишкам; на финише серии — удар.`,
   E27:()=>`Три фишки в линию через ${DIST.E27.DANIIL} м (Адриану ${DIST.E27.ADRIAN} м), старт от средней.\nВорота в ${E27_GOAL_M.DANIIL} м от линии (Адриану ${E27_GOAL_M.ADRIAN} м), ты у ворот. Отдых ${REST.E27} сек.`,
+  E28:()=>`Мяч лежит: Даниил бьёт с ${E28_RANGE.DANIIL}, Адриан с ${E28_RANGE.ADRIAN}. Ты в воротах.\nПо ${E28_SHOTS} ударов, отдыха между ударами нет — бьют по очереди.`,
   E17:(spec)=>`${N_TRY(repsOf("E17","DANIIL",spec))} каждому по ${E17_JUMPS.DANIIL}/${E17_JUMPS.ADRIAN} прыжка.\nТот же коридор ${DIST.E17.DANIIL} м, что у «Стартов» — фишки ставятся один раз.\nЗамер только бега после последнего прыжка, отдых ${REST.E17} сек.`,
   E01:()=>`Даниил: 2 фишки на ${DIST.E01.DANIIL} м — его коридор.\nАдриан: рядом в ${E01_LANE_GAP} м, 2 фишки на ${DIST.E01.ADRIAN} м.\nСтарты по очереди, ты на общем финише.`,
   E02:()=>{const fly=DIST.E02["25m_fly"], run=fly-E02_MEASURE["25m_fly"];
@@ -1376,19 +1404,19 @@ E24:{ name:"Разворот на 180°", type:"time", stopT:0.30,
   rec:"Время каждого повтора, отдельно через правое и через левое плечо.",
 },
 E25:{ name:"Интервалы 30-30", type:"intervals",
-  work:()=>E25_WORK_SEC, restSec:()=>E25_REST_SEC, ball:false,
-  setup:()=>`Прямая вдоль поля. Фишки через каждые ${E25_CONE_STEP} метров, от ${E25_MARKS[0]} до ${E25_MARKS[E25_MARKS.length-1]} метров — итого ${nOf(E25_MARKS.length,"фишка","фишки","фишек")}.\nИгроки стартуют от нулевой отметки и бегут в одну сторону.\nТы стоишь сбоку и видишь всю дорожку.`,
+  work:()=>E25_WORK_SEC, restSec:()=>E25_REST_SEC, ball:false, manual:true,
+  setup:()=>`Прямая вдоль поля. Фишки через каждые ${E25_CONE_STEP} метров, от ${E25_MARKS[0]} до ${E25_MARKS[E25_MARKS.length-1]} метров — итого ${nOf(E25_MARKS.length,"фишка","фишки","фишек")}.\nИгроки стартуют от нулевой отметки и бегут в одну сторону.\nТы стоишь сбоку, видишь всю дорожку и запускаешь каждый отрезок сам.`,
   svg:()=>trackSvg(E25_MARKS,E25_CONE_STEP,null),
   steps:(spec)=>[`${E25_WORK_SEC} секунд бега на высокой скорости — примерно 80% от максимума, НЕ спринт.`,
     "По сигналу приложения останавливаются ТАМ, ГДЕ ДОБЕЖАЛИ.",
     `${E25_REST_SEC} секунд шагом обратно к старту. Следующий интервал снова от нуля.`,
     `Даниил ${N_REP(intervalReps("E25","DANIIL"))}, Адриан ${N_REP(intervalReps("E25","ADRIAN"))}. Оба бегут ОДНОВРЕМЕННО, не по очереди.`,
     `ЗАМЕР — ДИСТАНЦИЯ, а не время: после каждого отрезка приложение спросит, до какой фишки добежал каждый. Остановился между фишками — округляй до ближайшей.`,
-    `Таймер приложение ведёт само: сигнал за ${INTERVAL_WARN_SEC} секунд до смены и длинный в момент смены. Засекать ничего не нужно — только ввести метры.`,
-    "Показатель — падение дистанции от первого интервала к последнему: держит ли темп всю серию.",
-    INTERVAL_RANGE_NOTE],
-  reps_text:(spec)=>`${PLAYERS.map(pl=>`${RU[pl]}: ${N_REP(intervalReps("E25",pl))}`).join("\n")}\n${E25_WORK_SEC} сек бега на ~80% и ${E25_REST_SEC} сек шагом обратно. Оба одновременно.\nПишем дистанцию по фишкам (${E25_MARKS[0]}-${E25_MARKS[E25_MARKS.length-1]} м через ${E25_CONE_STEP}), времени нет.`,
-  why:`За ${E25_WORK_SEC} секунд на высокой, но не предельной скорости Даниил пробегает примерно 150-190 м, Адриан 110-150. Отсюда диапазон фишек ${E25_MARKS[0]}-${E25_MARKS[E25_MARKS.length-1]} м, взятый с запасом в обе стороны.`,
+    `ЗАПУСК РУЧНОЙ: жмёшь СТАРТ — идёт отсчёт ${E25_WORK_SEC} секунд, сигнал за ${INTERVAL_WARN_SEC} секунд до конца и длинный в конце.`,
+    "После ввода метров — экран ожидания: время отдыха идёт вверх без ограничения. Жмёшь СТАРТ СЛЕДУЮЩЕГО, когда оба вернулись на линию. Автоматического перехода нет.",
+    "Показатель — падение дистанции от первого интервала к последнему: держит ли темп всю серию."],
+  reps_text:(spec)=>`${PLAYERS.map(pl=>`${RU[pl]}: ${N_REP(intervalReps("E25",pl))}`).join("\n")}\n${E25_WORK_SEC} сек бега на ~80%, потом шагом обратно — отдых по факту, запуск ручной.\nПишем дистанцию по фишкам (${E25_MARKS[0]}-${E25_MARKS[E25_MARKS.length-1]} м через ${E25_CONE_STEP}), времени нет.`,
+  why:`За ${E25_WORK_SEC} секунд на высокой, но не предельной скорости Даниил пробегает примерно 150-190 м, Адриан 110-150. Диапазон фишек ${E25_MARKS[0]}-${E25_MARKS[E25_MARKS.length-1]} м подтверждён на занятии 27.08: Даниил добегает до 190-195 м.`,
   smotri:"Темп ровный от первого отрезка к последнему: дистанция не должна падать. Дыхание восстанавливается за шаговые 30 секунд.",
   oshibka:"Первые отрезки на максимум — тогда последние идут пешком, и объём не набирается.",
   pravilno:"Последний отрезок такой же, как первый.",
@@ -1398,6 +1426,7 @@ E25:{ name:"Интервалы 30-30", type:"intervals",
 },
 E26:{ name:"Интервалы с мячом 15-15", type:"intervals",
   work:()=>E26_WORK_SEC, restSec:()=>E26_REST_SEC, ball:true, series:true,
+  rangeNote:true,
   setup:()=>`Прямая вдоль поля. Фишки через каждые ${E26_CONE_STEP} метров, от ${E26_MARKS[0]} до ${E26_MARKS[E26_MARKS.length-1]} метров — итого ${nOf(E26_MARKS.length,"фишка","фишки","фишек")}.\nВорота в конце дорожки. Мяч у каждого свой. Ты сбоку, видишь всю дорожку.`,
   svg:()=>trackSvg(E26_MARKS,E26_CONE_STEP,"ворота"),
   steps:(spec)=>[`${E26_WORK_SEC} секунд ведения мяча на высокой скорости, ${E26_REST_SEC} секунд шагом обратно с мячом.`,
@@ -1415,6 +1444,30 @@ E26:{ name:"Интервалы с мячом 15-15", type:"intervals",
   match:"Контроль мяча на уставших ногах. Техника в конце матча.",
   diff:{DANIIL:"Двенадцать отрезков двумя сериями.",ADRIAN:"Десять отрезков двумя сериями."},
   rec:"Дистанция каждого отрезка в метрах, на финише серии — гол. Времени нет.",
+},
+E28:{ name:"Удары с места", type:"shots", subs:E28_SUBS,
+  shotsWord:"ударов", shotsVerb:"забил",
+  setup:()=>`Мяч лежит, игрок бьёт с места.\nДаниил с ${E28_RANGE.DANIIL}, Адриан с ${E28_RANGE.ADRIAN}. Ты в воротах.\nОтдыха между ударами нет — бьют по очереди.`,
+  svg:()=>{const xGoal=250, x0=60, xa=110;
+    return svg(
+      goalV(xGoal,84)+
+      player(x0,54,"Даниил")+ball(x0+12,60)+arrow(x0+14,54,xGoal-10,74)+
+      player(xa,116,"Адриан")+ball(xa+12,122)+arrow(xa+14,116,xGoal-10,96)+
+      dim(x0,146,xGoal,E28_RANGE.DANIIL)+
+      lblC(150,34,"мяч лежит, удар с места")+
+      coach(xGoal+26,84,"ТЫ"));},
+  steps:(spec)=>["Мяч лежит на месте, игрок бьёт без разбега и без ведения.",
+    `Даниил ${nOf(E28_SHOTS,"удар","удара","ударов")} с ${E28_RANGE.DANIIL}, Адриан ${nOf(E28_SHOTS,"удар","удара","ударов")} с ${E28_RANGE.ADRIAN}.`,
+    "Отдыха между ударами нет: бьют по очереди, пока один бьёт — второй забирает мяч.",
+    `Учёт один: сколько забил из ${E28_SHOTS}.`,
+    "Последний блок дня — после тяжёлой серии интервалов. Это восстановление и работа над ударом на уставших ногах, а не скорость."],
+  reps_text:(spec)=>`${PLAYERS.map(pl=>`${RU[pl]}: ${nOf(shotsPerSub("E28",pl),"удар","удара","ударов")} с ${E28_RANGE[pl]}`).join("\n")}\nОтдыха между ударами нет, учёт одним числом.`,
+  smotri:"Опорная нога рядом с мячом, корпус над мячом. К концу серии не заваливается назад.",
+  oshibka:"Бьёт сильнее, чем может на уставших ногах, — мяч уходит выше ворот.",
+  pravilno:"Точность не падает от первого удара к пятнадцатому.",
+  match:"Удар на уставших ногах: в матче добивают и бьют штрафные не на свежих.",
+  diff:{DANIIL:`${E28_RANGE.DANIIL} от ворот.`,ADRIAN:`${E28_RANGE.ADRIAN} от ворот.`},
+  rec:`Голы одним числом из ${E28_SHOTS}.`,
 },
 E27:{ name:"Челнок с мячом", type:"time_goal", stopT:0.60,
   setup:()=>`Три фишки в линию: Даниилу через ${DIST.E27.DANIIL} м, Адриану через ${DIST.E27.ADRIAN} м.\nСтарт от средней. Ворота в ${E27_GOAL_M.DANIIL} метрах от линии фишек (Адриану в ${E27_GOAL_M.ADRIAN}).\nТы у ворот.`,
@@ -1669,7 +1722,29 @@ function prevToday(player,ex,variant){
    РЕНДЕР
    ================================================================ */
 const app=document.getElementById("app");
-function h(html){app.innerHTML=html;window.scrollTo(0,0);}
+/* ЕДИНАЯ ТОЧКА ОТРИСОВКИ. Любой экран начинается с h(), поэтому здесь же
+   гасятся ВСЕ таймеры предыдущего экрана.
+
+   Почему так. Таймеров четыре — отсчёт (cdTimer), строка отдыха второго
+   брата (restTimer), опрос готовности на экране отдыха (S._restTimer)
+   и секундомер (S.watch.raf). Убирал за собой каждый экран сам, и хвост
+   от прошлого продолжал жить: тик отсчёта ищет элемент ПО ID, а id "rc"
+   и "num" повторяются на десятке экранов — старый таймер начинал писать
+   в новый экран наперегонки с новым. Отсюда мигание, прыгающий секундомер,
+   замершие последние секунды и ноль на таймере после конца упражнения.
+   Питьевой таймер занятия сюда не входит: он не экранный. */
+function stopScreenTimers(){
+  stopCountdown(); stopRestBadge();
+  if(S&&S._restTimer){clearInterval(S._restTimer);S._restTimer=null;}
+  if(S&&S.watch&&S.watch.running){S.watch.running=false;
+    if(S.watch.raf)cancelAnimationFrame(S.watch.raf);}
+}
+// Активен ли хоть один экранный таймер (для проверок в прогоне).
+function screenTimersRunning(){
+  return !!(cdTimer||restTimer||(S&&S._restTimer)
+    ||(S&&S.watch&&S.watch.running));
+}
+function h(html){ stopScreenTimers(); app.innerHTML=html; window.scrollTo(0,0); }
 function overlay(html){let o=document.getElementById("ovl");
   if(!o){o=document.createElement("div");o.id="ovl";o.className="overlay";document.body.appendChild(o);}
   o.innerHTML=html;}
@@ -1711,8 +1786,8 @@ function markInterrupted(){
   (S.attempts||[]).forEach(a=>{a.interrupted=true;});
   saveSession();
 }
-function cancelSession(){ markInterrupted(); closeOverlay(); stopCountdown();
-  stopRestBadge(); screenHome(); }
+function cancelSession(){ markInterrupted(); closeOverlay(); stopScreenTimers();
+  screenHome(); }
 /* ПРОПУСК УПРАЖНЕНИЯ — по ИГРОКУ, не по занятию. Применяется к тому, чья
    очередь сейчас на экране: он выбывает из этого упражнения, второй
    доделывает свои повторы до конца (без чередования, с обычным отдыхом).
@@ -1756,10 +1831,7 @@ function skipExercise(pl){
   if(!S.block)S.block={ex:(S.measure||S.ctrl||S.duelrun||{}).ex||""};
   S.block.skip=S.block.skip||{};
   S.block.skip[pl]=true;
-  closeOverlay(); stopCountdown(); stopRestBadge();
-  if(S._restTimer){clearInterval(S._restTimer);S._restTimer=null;}
-  if(S.watch&&S.watch.running){S.watch.running=false;
-    if(S.watch.raf)cancelAnimationFrame(S.watch.raf);}
+  closeOverlay(); stopScreenTimers();
   saveSession();
   // Оба пропустили — упражнение закрыто; иначе второй доигрывает своё.
   if(PLAYERS.every(p=>isSkipped(p))) return closeExercise();
@@ -1779,10 +1851,7 @@ function closeExercise(){
   saveSession(); nextStep();
 }
 function closeCurrentWork(){
-  closeOverlay(); stopCountdown(); stopRestBadge();
-  if(S._restTimer){clearInterval(S._restTimer);S._restTimer=null;}
-  if(S.watch&&S.watch.running){S.watch.running=false;
-    if(S.watch.raf)cancelAnimationFrame(S.watch.raf);}
+  closeOverlay(); stopScreenTimers();
   ["measure","ctrl","duelrun","four","shots","drills","star","iv"].forEach(k=>{delete S[k];});
 }
 /* Закрыть упражнение обоим сразу. Отдельная точка входа: сюда приходят из
@@ -2036,6 +2105,9 @@ function startSessionClock(){
   lastDrink=0; if(sessionTimer)clearInterval(sessionTimer);
   sessionTimer=setInterval(()=>{
     const min=(performance.now()-S.startMs)/60000;
+    // В ручной серии интервалов питьё не показываем: оверлей сбивает ритм.
+    // Напоминание не теряется — придёт на следующем тике после блока.
+    if(S&&S.iv&&EX[S.iv.ex]&&EX[S.iv.ex].manual)return;
     if(min>=lastDrink+15){lastDrink=Math.floor(min/15)*15;showDrink();}
   },5000);
 }
@@ -2323,7 +2395,8 @@ function workIntervals(st){
   const series={}; blockPlayers(st.ex).forEach(pl=>{
     series[pl]=e.series?e26Series(pl):[intervalReps(st.ex,pl)];});
   const maxSeries=Math.max(1,...Object.values(series).map(x=>x.length));
-  S.iv={ex:st.ex,series,maxSeries,s:0,leg:0,phase:"work",restFrom:0};
+  S.iv={ex:st.ex,series,maxSeries,s:0,leg:0,
+        phase:e.manual?"idle":"work",restFrom:0,restSec:null};
   ivRender();
 }
 // Сколько отрезков в этой серии у самого «длинного» игрока.
@@ -2340,6 +2413,11 @@ function ivRender(){
   const iv=S.iv, e=EX[iv.ex];
   const legs=ivLegs(iv,iv.s);
   if(iv.leg>=legs) return ivNextSeries();
+  // РУЧНОЙ ЗАПУСК (e.manual): автоматический цикл 30/30 не работает —
+  // игроки возвращаются на старт за 40-45 секунд, и приложение стартовало
+  // следующий отрезок, когда они ещё шли. Тренер жмёт старт сам, а время
+  // отдыха идёт вверх без ограничения и пишется в заметку попытки.
+  if(e.manual&&(iv.phase==="idle"||iv.phase==="rest")) return ivManualScreen();
   const work=iv.phase==="work";
   const sec=work?e.work():e.restSec();
   // Отдых считается от конца работы: ввод дистанции идёт внутри него.
@@ -2369,7 +2447,37 @@ function ivNext(){ stopCountdown();
     iv.restFrom=Date.now(); iv.asked={};
     iv.phase="ask"; saveSession(); return ivAsk();
   }
-  iv.phase="work"; iv.leg++; saveSession(); ivRender();
+  iv.phase="work"; iv.leg++; iv.restSec=null; saveSession(); ivRender();
+}
+/* Ручной цикл: экран старта отрезка и экран ожидания с временем отдыха,
+   которое идёт ВВЕРХ. Автоматического перехода нет — тренер жмёт старт,
+   когда оба вернулись на линию. */
+function ivManualScreen(){
+  const iv=S.iv, e=EX[iv.ex], legs=ivLegs(iv,iv.s);
+  const first=(iv.phase==="idle");
+  h(`<h1>${e.name}</h1>
+    <div class="card center">
+      <div class="sub">${iv.maxSeries>1?`серия ${iv.s+1} из ${iv.maxSeries} · `:""}интервал ${iv.leg+1} из ${legs}</div>
+      ${first?`<div class="name" style="font-size:24px">Оба бегут одновременно</div>
+        <div class="note">${e.work()} секунд на ~80% от максимума, не спринт.
+        По сигналу останавливаются там, где добежали.</div>`
+      :`<div class="name" style="font-size:24px">Отдых. Возвращаются на старт.</div>
+        <div class="note">Прошло <span id="upc">0:00</span></div>
+        <div class="note">Времени не ограничиваем: жми старт, когда оба на линии.</div>`}
+    </div>
+    <div class="row"><button class="go" style="min-height:88px;font-size:26px"
+      onclick="ivManualStart()">${first?"СТАРТ":"СТАРТ СЛЕДУЮЩЕГО"}</button></div>
+    ${smallActions()}`);
+  if(!first) countUpFrom(iv.restFrom,"upc");
+}
+function ivManualStart(){
+  const iv=S.iv;
+  if(iv.phase==="rest"){
+    // Фактическая длительность отдыха — в заметку следующей попытки.
+    if(iv.restFrom)iv.restSec=Math.round((Date.now()-iv.restFrom)/1000);
+    iv.leg++;                       // отрезок закрыт, идём к следующему
+  }
+  iv.phase="work"; saveSession(); ivRender();
 }
 /* Ввод результата отрезка — по одному игроку за раз. Дистанция по фишкам;
    на финише серии вместо неё гол. */
@@ -2395,14 +2503,18 @@ function ivAsk(){
     <div class="title">До какой фишки добежал?</div>
     <div class="grid4">${marks.map(m=>`<button onclick="ivDistSave('${pl}',${m})">${m}</button>`).join("")}</div>
     <div class="note">Остановился между фишками — округляй до ближайшей.</div>
-    <div class="note">${INTERVAL_RANGE_NOTE}</div>
+    ${EX[iv.ex].rangeNote?`<div class="note">${INTERVAL_RANGE_NOTE}</div>`:""}
     ${smallActions()}`);
 }
 function ivDistSave(pl,m){
   const iv=S.iv;
   // Номер попытки сквозной по упражнению: серии идут подряд.
+  // В ручном режиме пишем фактический отдых перед этим отрезком —
+  // тридцати секунд из названия упражнения там не бывает.
   pushAttempt({player:pl,ex:iv.ex,variant:"",attempt_no:ivAttemptNo(iv,pl),
-    dist:m,time_sec:null});
+    dist:m,time_sec:null,
+    note:(iv.restSec===null||iv.restSec===undefined)?""
+      :`отдых ${iv.restSec} сек`});
   iv.asked=iv.asked||{}; iv.asked[pl]=true;
   saveSession(); ivAsk();
 }
@@ -2740,7 +2852,15 @@ function continueSeries(){const m=S.measure,cur=m.order[m.pos],k=seriesKey(cur);
    в общем проценте. Учёт голов отдельно по каждой подсерии. */
 const E07_SUBS=[{v:"turn_right",side:"справа",label:"ты справа за спиной"},
                 {v:"turn_left", side:"слева", label:"ты слева за спиной"}];
-function shotsDist(ex){ return ex==="E07"?{DANIIL:20,ADRIAN:15}:{DANIIL:15,ADRIAN:12}; }
+function subsOf(ex){ return (EX[ex]&&EX[ex].subs)?EX[ex].subs:E07_SUBS; }
+function shotsDist(ex){
+  if(ex==="E07")return {DANIIL:20,ADRIAN:15};
+  if(ex==="E28")return {DANIIL:E28_DIST.DANIIL,ADRIAN:E28_DIST.ADRIAN};
+  return {DANIIL:15,ADRIAN:12}; }
+// Сколько ударов в подсерии у игрока: у «Разворота» своё, у «Ударов» своё.
+function shotsPerSub(ex,pl){
+  if(ex==="E28")return isLight(pl)?E28_LIGHT_SHOTS:E28_SHOTS;
+  return e07Shots(pl); }
 function workShots(st){ // подсерия за подсерией, внутри — оба игрока
   const ex=st.ex;
   S.shots={ex,player:"DANIIL",sub:0,dist:shotsDist(ex),
@@ -2750,17 +2870,19 @@ function workShots(st){ // подсерия за подсерией, внутр�
   shotsRender();
 }
 function shotsRender(){
-  const s=S.shots, sub=E07_SUBS[s.sub], N=e07Shots(s.player);
+  const s=S.shots, subs=subsOf(s.ex), sub=subs[s.sub], N=shotsPerSub(s.ex,s.player);
+  const one=(subs.length===1);
   h(`${countHeader(s.player,EX[s.ex].name+" · "+sub.side+lightTag(s.player),N,s.word)}
     <div class="title">Сколько ${s.verb} из ${N}?</div>
-    <div class="note">Подсерия ${s.sub+1} из ${E07_SUBS.length}: ${sub.label},
-    ${N} ${plural(N,"приём","приёма","приёмов")} подряд с одной стороны.</div>
+    <div class="note">${one?`${sub.label}, ${N} ${plural(N,"удар","удара","ударов")} подряд.`
+      :`Подсерия ${s.sub+1} из ${subs.length}: ${sub.label},
+    ${N} ${plural(N,"приём","приёма","приёмов")} подряд с одной стороны.`}</div>
     <div class="gridN">${Array.from({length:N+1},(_,i)=>`<button onclick="shotsSave(${i})">${i}</button>`).join("")}</div>
     ${smallActions()}`);
 }
-function shotsSave(g){const s=S.shots, sub=E07_SUBS[s.sub];
+function shotsSave(g){const s=S.shots, sub=subsOf(s.ex)[s.sub];
   pushAttempt({player:s.player,ex:s.ex,variant:sub.v,attempt_no:s.sub+1,
-    goals:g,shots:e07Shots(s.player),dist:s.dist[s.player]});
+    goals:g,shots:shotsPerSub(s.ex,s.player),dist:s.dist[s.player]});
   return shotsSkipPlayer();
 }
 // Следующий, кто ещё в упражнении: пропустившего перешагиваем.
@@ -2768,7 +2890,7 @@ function shotsSkipPlayer(){
   const s=S.shots;
   if(s.player==="DANIIL"){s.player="ADRIAN";}
   else { s.player="DANIIL"; s.sub++; }
-  if(s.sub>=E07_SUBS.length){ delete S.shots; saveSession(); return nextStep(); }
+  if(s.sub>=subsOf(s.ex).length){ delete S.shots; saveSession(); return nextStep(); }
   if(isSkipped(s.player)||blockPlayers(s.ex).indexOf(s.player)<0)
     return shotsSkipPlayer();
   return shotsRender();
@@ -3149,10 +3271,15 @@ function mTxt(v){ return (v===null||v===undefined)?"—":`${Math.round(v)} м`; 
 function intervalChunk(e,list,player){
   const lines=[], dists=intervalDists(list);
   if(dists.length){
+    // МЕТРИКА «БОЛЬШЕ — ЛУЧШЕ»: лучший интервал это МАКСИМУМ, и среднее
+    // по определению не может его превысить. Рекорд — лучшее СРЕДНЕЕ
+    // за занятие, поэтому подписан «рекорд среднего».
+    const best=Math.max(...dists);
     const avg=dists.reduce((a,b)=>a+b,0)/dists.length;
     const rec=distRecord(player,list[0].exercise_id,S.spec.iso);
     lines.push(`Первый ${mTxt(dists[0])}, последний ${mTxt(dists[dists.length-1])}, `
-      +`среднее ${mTxt(avg)}`+(rec===null?FIRST_MEASURE:`, рекорд ${mTxt(rec)}`));
+      +`лучший ${mTxt(best)}, среднее ${mTxt(avg)}`
+      +(rec===null?FIRST_MEASURE:`, рекорд среднего ${mTxt(rec)}`));
     if(rec!==null&&Math.round(avg)>Math.round(rec))
       lines.push("",`${NEW_RECORD} Прежнее среднее ${mTxt(rec)}, прибавка ${Math.round(avg)-Math.round(rec)} м`,"");
     const f=intervalFade(dists);
