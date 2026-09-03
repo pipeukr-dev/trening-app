@@ -93,7 +93,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260903-0242-f397b08';
+const BUILD = '20260903-1106-482230d';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -298,7 +298,7 @@ const REST={
   E15:90,
   E17:30,
   // Режим 2.
-  E18:60,
+  E18:45,
   E19:{DANIIL:40,ADRIAN:30},
   E22:60,
   E24:75,
@@ -309,6 +309,21 @@ function restOf(ex,key){ const r=REST[ex];
   return (r&&typeof r==="object")?r[key]:r; }
 // Число повторов по факту плана дня — не по памяти текста.
 // Числа в текстах подставляются, поэтому склонение считается, а не пишется.
+/* ПОРОГ ФОРМАТА ВРЕМЕНИ. Больше минуты «219.20» на глаз не читается: пока
+   тренер переводит секунды в минуты, он теряет мысль. Всё, что дольше,
+   показываем как м:сс — и только ПОКАЗЫВАЕМ: в записях и в выгрузке время
+   остаётся числом секунд, иначе перестанут работать формулы, сравнения
+   и расчёт рекордов (dupl. bot/rules.py MINUTE_SEC / fmt_time).
+   Секунды округляются по ПОЛНОМУ значению, а не по остатку: 119.6 — это
+   2:00, а не 1:60. Правило общее для всех упражнений: как только чей-то
+   результат перевалит за минуту, он сам начнёт показываться в минутах. */
+const MINUTE_SEC=60;
+function fmtT(v){
+  if(v===null||v===undefined||isNaN(v))return "—";
+  if(Math.abs(v)<=MINUTE_SEC)return Number(v).toFixed(2);
+  const sign=v<0?"-":"", total=Math.floor(Math.abs(v)+0.5);
+  return `${sign}${Math.floor(total/60)}:${String(total%60).padStart(2,"0")}`;
+}
 function plural(n,one,few,many){
   const a=Math.abs(n)%100, b=a%10;
   if(a>10&&a<20)return many;
@@ -578,7 +593,7 @@ function sessionMinutesNow(spec){
    1 — основная программа, 2 — скорость и игровая выносливость (25.08).
    День определяется по календарю одинаково, разминка и заминка те же.
    ПН 83, ВТ 76, СР 83, ЧТ 97, ПТ 78 — режим 1
-   ПН 83, ВТ 75, СР 73, ЧТ 82, ПТ 81 — режим 2 */
+   ПН 82, ВТ 75, СР 73, ЧТ 81, ПТ 81 — режим 2 */
 const MODE_MAIN=1, MODE_SPEED=2, MODES=[MODE_MAIN,MODE_SPEED];
 const MODE1_MATRIX={
   MON:["Скорость и первый шаг",[["E17",5,5],["E01",11,8],["E02",13,0],["E13",16,10],["E12",13,7]]],
@@ -588,10 +603,10 @@ const MODE1_MATRIX={
   FRI:["Отрыв и завершение",[["E15",10,7],["E12",11,7],["E14",15,10],["E13",18,13]]],
 };
 const MODE2_MATRIX={
-  MON:["Максимальная скорость",[["E18",12,9],["E01",11,8],["E24",14,8],["E17",5,5],["E13",16,10]]],
+  MON:["Максимальная скорость",[["E18",11,9],["E01",11,8],["E24",14,8],["E17",5,5],["E13",16,10]]],
   TUE:["Повторные рывки",[["E17",5,5],["E04",12,9],["E19",22,15],["E05",12,9]]],
   WED:["Агилити и техника бега",[["E03",10,7],["E22",12,9],["E23",12,7],["E14",15,10]]],
-  THU:["Скорость и смена направления",[["E18",12,9],["E07",19,13],["E29",17,9],["E28",10,7]]],
+  THU:["Скорость и смена направления",[["E18",11,9],["E07",19,13],["E29",17,9],["E28",10,7]]],
   FRI:["Игровая выносливость",[["E15",10,7],["E26",17,10],["E27",12,7],["E13",18,13]]],
 };
 const DAY_MATRIX={1:MODE1_MATRIX,2:MODE2_MATRIX};
@@ -2612,15 +2627,28 @@ function ivNextSeries(){
   countdownTo(target,"rc",()=>{stopCountdown();ivRender();});
 }
 
-/* Время серии — это минуты, а не секунды спринта, и parseTime здесь не
-   годится: он делит «138» на сто (правило «206 → 2.06» для стартов).
-   Принимаем секунды и запись м:сс. */
+/* Ввод длинного времени. parseTime здесь не годится: он делит «138» на сто
+   по правилу «206 → 2.06», нужному на стартах, и минуты превратились бы
+   в секунды. Разбираем по двоеточию и по величине числа:
+     «3:39»   → 219   двоеточие — это минуты и секунды;
+     «219.2»  → 219.2 точка — это секунды с долями;
+     «339»    → 219   голое число от ста: последние две цифры — секунды,
+                      если их меньше шестидесяти (339 = 3 мин 39 с);
+     «175»    → 175   «:75» не бывает, значит это просто секунды;
+     «45»     → 45    меньше ста — секунды.
+   Возвращаем ВСЕГДА секунды числом: в записи и в выгрузку идёт оно. */
 function parseSeriesTime(str){
   const t=(str||"").trim().replace(",",".");
   if(!t)return null;
   if(t.indexOf(":")>=0){ const p=t.split(":");
     const v=Number(p[0])*60+Number(p[1]); return isNaN(v)?null:v; }
-  const v=parseFloat(t); return isNaN(v)?null:v;
+  const v=parseFloat(t);
+  if(isNaN(v))return null;
+  if(t.indexOf(".")<0&&v>=100){
+    const sec=v%100;
+    if(sec<60)return Math.floor(v/100)*60+sec;
+  }
+  return v;
 }
 
 /* ---- Измеряемые упражнения (time / time_goal / breakaway) ---- */
@@ -2684,8 +2712,8 @@ function screenBreakawayDelta(){
       : d<=0.6?"На границе." : "Не способен, ноги не восстанавливаются между всплесками.";
     if(!times.length) return "";
     return `<div class="card center"><div class="name">${RU[pl]}</div>
-      <div class="big" style="font-size:30px">${times.map(t=>t.toFixed(2)).join(" → ")}</div>
-      <div class="title">Дельта 1-3: ${d!==null?d.toFixed(2):"—"}</div>
+      <div class="big" style="font-size:30px">${times.map(t=>fmtT(t)).join(" → ")}</div>
+      <div class="title">Дельта 1-3: ${fmtT(d)}</div>
       <div class="note">${verdict}</div></div>`;
   }).join("");
   h(`<h1>Отрыв · дельта</h1>${cards||`<div class="card center"><div class="note">Замеров нет.</div></div>`}
@@ -2759,10 +2787,10 @@ function screenStopwatch(cur,ready10){
     break; } }
   const redo=(m.redo&&m.pos===m.redo.slot)?
     `<div class="warnbox center">Переписываем попытку ${cur.attempt_no}. Прежний результат `+
-    `${m.redo.prev!==null&&m.redo.prev!==undefined?Number(m.redo.prev).toFixed(2):"не засечено"}`+
+    `${m.redo.prev!==null&&m.redo.prev!==undefined?fmtT(m.redo.prev):"не засечено"}`+
     ` будет заменён.</div>`:"";
   const prev=prevToday(cur.player,cur.ex,cur.variant), rec=recordFor(cur.player,cur.ex,cur.variant);
-  const recLine=(prev!==null||rec!==null)?`Пред. ${prev!==null?prev.toFixed(2):"—"} · рекорд ${rec!==null?rec.toFixed(2):"—"}`:"";
+  const recLine=(prev!==null||rec!==null)?`Пред. ${fmtT(prev)} · рекорд ${fmtT(rec)}`:"";
   h(`${redo}${ready10?`<div class="warnbox center">ГОТОВНОСТЬ<div id="rc10"></div></div>`:""}
     <div class="title">${e.name}</div><div class="hr"></div>
     ${e.watchNote?`<div class="note center">${e.watchNote}</div>`:""}
@@ -2803,7 +2831,7 @@ function tapWatch(){
     document.getElementById("tap").classList.add("run");
     document.getElementById("hint").textContent="тап = стоп";
     const loop=()=>{const el=document.getElementById("num");if(!el||!w.running)return;
-      el.textContent=((performance.now()-w.t0)/1000).toFixed(2);w.raf=requestAnimationFrame(loop);};
+      el.textContent=fmtT((performance.now()-w.t0)/1000);w.raf=requestAnimationFrame(loop);};
     w.raf=requestAnimationFrame(loop);
   } else {
     w.running=false; if(w.raf)cancelAnimationFrame(w.raf);
@@ -2816,7 +2844,7 @@ function longTimeNow(){
   return !!(cur&&exOf(cur.ex)&&exOf(cur.ex).longTime);
 }
 function manualEntry(){overlay(`<div class="card"><div class="title">Ручной ввод ${
-  longTimeNow()?"(138 / 138.4 / 2:18)":"(2.06 / 2,06 / 206)"}</div>
+  longTimeNow()?"(3:39 / 339 / 219.2)":"(2.06 / 2,06 / 206)"}</div>
   <input type="text" id="mv" inputmode="decimal">
   <div class="row"><button class="go" onclick="applyManual()">Ок</button>
    <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);}
@@ -2899,7 +2927,7 @@ function lostBall(){
 function screenSloppyAsk(cur,t){
   h(`<h1>${EX[cur.ex].name}</h1>
     <div class="card center"><div class="name">${RU[cur.player]}</div>
-      <div class="note">${t===null?"время не засечено":t.toFixed(2)}</div></div>
+      <div class="note">${t===null?"время не засечено":fmtT(t)}</div></div>
     <div class="title">Сколько спринтов бежал не в полную силу?</div>
     <div class="grid4">${E29_SLOPPY.map((n,i)=>
       `<button onclick="setSloppy(${n})">${i===E29_SLOPPY.length-1?E29_SLOPPY_LAST:n}</button>`).join("")}</div>
@@ -2920,7 +2948,7 @@ function setSloppy(n){
 function screenGoalAsk(cur,t){
   h(`<h1>Гол?</h1>
     <div class="card center">
-      <div style="font-size:24px;font-weight:800">${RU[cur.player]} · ${t.toFixed(2)} · Гол?</div></div>
+      <div style="font-size:24px;font-weight:800">${RU[cur.player]} · ${fmtT(t)} · Гол?</div></div>
     <div class="row"><button class="go" onclick="setGoal(true)">⚽ ДА</button>
       <button class="warn" onclick="setGoal(false)">✕ НЕТ</button></div>`);
 }
@@ -2951,8 +2979,8 @@ function screenStopRule(cur,best,t){
   h(`<h1>Стоп-правило</h1>
     <div class="card center"><div class="name">${RU[cur.player]}</div>
       <div class="title">Серия окончена</div>
-      <div class="big">Лучшее: ${best.toFixed(2)}</div>
-      <div class="note">Последняя ${t.toFixed(2)} — падение ${(t-best).toFixed(2)}.</div></div>
+      <div class="big">Лучшее: ${fmtT(best)}</div>
+      <div class="note">Последняя ${fmtT(t)} — падение ${fmtT(t-best)}.</div></div>
     <div class="row"><button class="go" onclick="stopSeries()">Завершить</button>
       <button class="ghost" onclick="continueSeries()">Ещё один</button></div>`);
 }
@@ -3182,7 +3210,7 @@ function fourRushTap(){
     document.getElementById("tap").classList.add("run");
     document.getElementById("hint").textContent="тап = стоп (удар)";
     const loop=()=>{const el=document.getElementById("num");if(!el||!w.running)return;
-      el.textContent=((performance.now()-w.t0)/1000).toFixed(2);w.raf=requestAnimationFrame(loop);};
+      el.textContent=fmtT((performance.now()-w.t0)/1000);w.raf=requestAnimationFrame(loop);};
     w.raf=requestAnimationFrame(loop);
   } else { w.running=false; if(w.raf)cancelAnimationFrame(w.raf);
     S.four.rush.t=(performance.now()-w.t0)/1000; fourRushGoal(); }
@@ -3191,7 +3219,7 @@ function fourRushGoal(){
   const f=S.four;
   h(`<h1>Гол в названный угол?</h1>
     <div class="card center"><div class="name">${RU[f.player]}</div>
-      <div class="big">${f.rush.t.toFixed(2)}</div></div>
+      <div class="big">${fmtT(f.rush.t)}</div></div>
     <div class="row"><button class="go" onclick="fourRushSave(true)">⚽ ДА</button>
       <button class="warn" onclick="fourRushSave(false)">✕ НЕТ</button></div>`);
 }
@@ -3273,10 +3301,10 @@ const FIRST_MEASURE=" — первый замер, это рекорд";
 function statsTxt(list,cap,record){
   const t=scoringTimes(list); if(!t.length)return null;
   const best=Math.min(...t), avg=t.reduce((x,y)=>x+y,0)/t.length;
-  const parts=[`${cap?"Лучшее":"лучшее"} ${best.toFixed(2)}`,`среднее ${avg.toFixed(2)}`];
+  const parts=[`${cap?"Лучшее":"лучшее"} ${fmtT(best)}`,`среднее ${fmtT(avg)}`];
   // Истории нет — так и пишем, строку не прячем.
   return parts.join(", ")+((record===undefined||record===null)?FIRST_MEASURE
-                                             :`, рекорд ${record.toFixed(2)}`);
+                                             :`, рекорд ${fmtT(record)}`);
 }
 // Строка нового рекорда — с пустой строкой сверху и снизу.
 function recordLines(list,record){
@@ -3284,7 +3312,7 @@ function recordLines(list,record){
   if(!t.length||record===undefined||record===null)return [];
   const best=Math.min(...t);
   if(best>=record)return [];
-  return ["",`${NEW_RECORD} Прежний ${record.toFixed(2)}, улучшение ${(record-best).toFixed(2)}`,""];
+  return ["",`${NEW_RECORD} Прежний ${fmtT(record)}, улучшение ${fmtT(record-best)}`,""];
 }
 function pctTail(record){return (record===null||record===undefined)
   ?FIRST_MEASURE:`, рекорд ${Math.round(record)}%`;}
@@ -3422,7 +3450,7 @@ function fadeLines(list){
   if(d===null)return [];
   const v=d<E19_FADE_GOOD?E19_FADE_VERDICTS.hold
     :d<=E19_FADE_BAD?E19_FADE_VERDICTS.edge:E19_FADE_VERDICTS.fade;
-  return [`  падение 1-${list.length}: ${d.toFixed(2)} — ${v}`];
+  return [`  падение 1-${list.length}: ${fmtT(d)} — ${v}`];
 }
 // Чистые удары по воротам: только они идут в «Всего ударов». Единоборства
 // тоже кончаются ударом, но упражнение там про обыгрыш и отбор — их процент
@@ -3446,9 +3474,9 @@ function shotsChunk(list,total,player){
     const t=[].concat(...subs.map(([v])=>(by[v]||{t:[]}).t));
     if(t.length){
       const tr=subs.map(([v])=>timeRecord(player,"E10",v,S.spec.iso)).filter(x=>x!==null);
-      const recTxt=tr.length?`, рекорд ${Math.min(...tr).toFixed(2)}`:FIRST_MEASURE;
+      const recTxt=tr.length?`, рекорд ${fmtT(Math.min(...tr))}`:FIRST_MEASURE;
       lines.push(" ".repeat(title.length+2)+
-        `лучшее ${Math.min(...t).toFixed(2)}, среднее ${(t.reduce((x,y)=>x+y,0)/t.length).toFixed(2)}${recTxt}`);
+        `лучшее ${fmtT(Math.min(...t))}, среднее ${fmtT(t.reduce((x,y)=>x+y,0)/t.length)}${recTxt}`);
     }
   });
   const rec=ratioRecord(player,"E10",S.spec.iso);
@@ -3465,8 +3493,8 @@ function breakawayChunks(list,player){
   const tt=list.slice().sort((a,b)=>a.attempt_no-b.attempt_no)
     .filter(a=>a.time_sec!==null&&!a.lost).map(a=>a.time_sec);
   if(tt.length){
-    lines.push(tt.map(x=>x.toFixed(2)).join(" → ")+
-      (rec===null?FIRST_MEASURE:`, рекорд ${rec.toFixed(2)}`));
+    lines.push(tt.map(x=>fmtT(x)).join(" → ")+
+      (rec===null?FIRST_MEASURE:`, рекорд ${fmtT(rec)}`));
     recordLines(list,rec).forEach(x=>lines.push(x));
   }
   if(tt.length>=2){ const d=Math.round((tt[tt.length-1]-tt[0])*100)/100;
@@ -3474,7 +3502,7 @@ function breakawayChunks(list,player){
     const v=oldBreakawayTiming()?E15_OLD_TIMING
       :d<0.3?"способен повторить отрыв":d<=0.6?"на границе"
       :"не способен, ноги не восстанавливаются между всплесками";
-    lines.push(`  дельта 1-3: ${d.toFixed(2)} — ${v}`); }
+    lines.push(`  дельта 1-3: ${fmtT(d)} — ${v}`); }
   const t=goalsOf(list);
   if(t.s){ lines.push(`Голы: ${pctTxt(t.g,t.s)}${pctTail(pctRec)}`);
     pctRecordLines(t.g,t.s,pctRec).forEach(x=>lines.push(x)); }
@@ -3641,7 +3669,7 @@ function screenLast(){
     const list=a.filter(x=>x.date===last&&x.player===pl&&x.time_sec!==null&&!x.lost);
     const byEx={};list.forEach(x=>{(byEx[x.exercise_id]=byEx[x.exercise_id]||[]).push(x.time_sec);});
     const rows=Object.keys(byEx).map(ex=>{const nm=(EX[ex]||{name:ex}).name;
-      return `<div>${nm}: ${Math.min(...byEx[ex]).toFixed(2)}</div>`;}).join("");
+      return `<div>${nm}: ${fmtT(Math.min(...byEx[ex]))}</div>`;}).join("");
     return `<div class="card"><div class="name">${RU[pl]}</div>${rows||'<div class="note">—</div>'}</div>`;
   }).join("");
   h(`<h1>Последнее занятие · ${last}</h1>${cards}
