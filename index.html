@@ -93,7 +93,7 @@ textarea{font-size:17px;width:100%;min-height:80px;padding:10px;
    что попадает в имя кэша sw.js и в адрес его регистрации ./sw.js?v=BUILD.
    Локально остаётся 'dev'. Показывается внизу главного экрана — по ней
    сразу видно, какая версия загружена на телефоне. */
-const BUILD = '20260903-1106-482230d';
+const BUILD = '20260904-0124-ec431a2';
 function buildLabel(){
   const m=/^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})-(.+)$/.exec(BUILD);
   return m?`Сборка ${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]} · ${m[6]}`:`Сборка ${BUILD}`;
@@ -215,31 +215,25 @@ const E29_SLOPPY_NOTE="не в полную силу";
    В жару единственный рычаг — перевести длинные стороны в быстрый шаг. */
 const E29_HEAT_C=30;
 const E29_HEAT_RULE=`Жарче ${E29_HEAT_C} градусов — длинные стороны быстрым шагом вместо трусцы. Паузы стоя здесь нет, охлаждаться негде, это единственный рычаг.`;
-// «Интервалы с мячом 15-15» (E26).
-const E26_WORK_SEC=15, E26_REST_SEC=15, E26_BREAK_SEC=180;
-/* Челнок: две фишки, между ними E26_LEG_M метров. Считаются ЦЕЛИКОМ
-   пройденные отрезки, неполный не идёт в счёт (dupl. bot/catalog.py). */
-const E26_LEG_M={DANIIL:20,ADRIAN:15};
-// 3-8 → 2-8 (31.08): на последних интервалах серии, особенно у Адриана
-// с его пятнадцатью метрами, два отрезка реальны.
-const E26_LEG_CHOICES=[2,3,4,5,6,7,8];
-/* Падение дистанции: первый интервал против последнего, в метрах
-   и процентах (dupl. bot/catalog.INTERVAL_FADE_*). */
-const INTERVAL_WARN_SEC=5;
-const INTERVAL_FADE_GOOD=10, INTERVAL_FADE_BAD=20;
-const INTERVAL_FADE_VERDICTS={hold:"держит темп всю серию",edge:"на границе",
-  fade:"садится, выносливости не хватает"};
-/* Отметок фишек не осталось ни у кого: единственным упражнением с фишечной
-   шкалой были «Интервалы 30-30», их больше нет. У «Челночных интервалов»
-   вводится число отрезков, а метры считает приложение. */
-const INTERVAL_MARKS={};
-const INTERVAL_LEGS={E26:E26_LEG_CHOICES};
-function shuttleMetres(pl,legs){ return legs*E26_LEG_M[pl]; }
-/* Диапазон посчитан, а не измерен: после первого занятия его надо сверить.
-   Строка осталась у «Интервалов с мячом»: их ещё не проверяли на поле. */
-const INTERVAL_RANGE_NOTE="Диапазон фишек подобран расчётом. После первого занятия сверь с фактом — если добегают до последней фишки или не доходят до первой, диапазон нужно сдвинуть.";
-const E26_SERIES={DANIIL:[6,6],ADRIAN:[5,5]};
-const E26_LIGHT_SERIES={DANIIL:[6],ADRIAN:[5]};
+/* «Треугольник и удар» (E30) — заменил «Челночные интервалы с мячом»
+   04.09: те дублировали «Челнок с мячом» из этого же дня, оба про ведение
+   с разворотами, отличалась только пауза (dupl. bot/catalog.py).
+   ПОЧЕМУ ТРИ МЕТРА: от центра до фишки около 1.7 м — два шага туда, два
+   обратно спиной, разгона нет, работают стопы и корпус. При стороне пять
+   метров начался бы разбег, и упражнение поехало бы в сторону челнока. */
+const E30_CONES=3, E30_SIDE_M=3, E30_CENTER_M=15;
+// Тренер на углу штрафной: у Даниила поле полноразмерное, у Адриана
+// 8×8 на половине — оттого и угол ближе, и накат короче.
+const E30_COACH_M={DANIIL:16.5,ADRIAN:13};
+const E30_PASS_M={DANIIL:20,ADRIAN:15};
+const E30_REST_SEC=60;
+/* Зеркалим угол подачи: пять повторов тренер накатывает справа, пять
+   слева. Учёт раздельный — накат справа и слева требует разной постановки
+   опорной ноги, и слабая сторона тонет в общем счёте. */
+const E30_SUBS=[{v:"corner_right",side:"с правого угла",reps:5},
+                {v:"corner_left", side:"с левого угла", reps:5}];
+const E30_LIGHT_PER_CORNER=3;
+
 // «Челнок с мячом» (E27): ворота в стороне от линии фишек.
 const E27_REPS=4;
 const E27_GOAL_M={DANIIL:15,ADRIAN:12};
@@ -302,7 +296,7 @@ const REST={
   E19:{DANIIL:40,ADRIAN:30},
   E22:60,
   E24:75,
-  E26:15,
+  E30:E30_REST_SEC,
   E27:90,
 };
 function restOf(ex,key){ const r=REST[ex];
@@ -364,6 +358,7 @@ const REPS={E01:{DANIIL:6,ADRIAN:5},E02:{DANIIL:6,ADRIAN:5},E04:{DANIIL:6,ADRIAN
    там, где объём другой (слалом: 5 проходов вместо шести — он тут
    разминочный, а не главный). dupl. bot/catalog.REP_COUNTS_MODE2. */
 const REPS2={E04:{DANIIL:5,ADRIAN:5},
+  E30:{DANIIL:10,ADRIAN:10},
   E18:{DANIIL:E18_REPS.DANIIL,ADRIAN:E18_REPS.ADRIAN},
   E19:{DANIIL:E19_REPS.DANIIL,ADRIAN:E19_REPS.ADRIAN},
   E05:{DANIIL:5,ADRIAN:5},
@@ -387,6 +382,7 @@ function repsCount(ex,pl){
 // Значение — число повторов; словарь по игроку там, где объём режется
 // по-разному («Прыжки и старт»: у младшего прыжков и так меньше).
 const LIGHT_REPS={E01:3,E02:0,E04:2,E05:2,E06:3,E07:4,E10S:2,E15:2,
+  E30:2*E30_LIGHT_PER_CORNER,
   E17:{DANIIL:2,ADRIAN:1},
   // Режим 2.
   E18:{DANIIL:3,ADRIAN:2},E19:{DANIIL:4,ADRIAN:3},E22:2,
@@ -399,6 +395,8 @@ const LIGHT_E10_SERIES=3;    // серии 1-3; серия 4 (рывок на п
 /* Облегчённый режим этого игрока. В контрольные дни всегда false, даже если
    флаг как-то попал в сохранённую сессию: замер с сокращённого числа
    попыток несравним с базой. */
+// Серий «Прямоугольника» у игрока: в облегчённом одна вместо двух.
+function rectSeries(pl){ return isLight(pl)?E29_LIGHT_SERIES:E29_SERIES[pl]; }
 function isLight(pl){
   return !!(S&&S.light&&S.light[pl]&&!(S.spec&&S.spec.control));
 }
@@ -411,17 +409,10 @@ const EX_UNIT={E01:N_RUN,E02:N_RUN,E04:N_PASS,E05:N_PASS,E06:N_REP,E10S:N_REP,
   E18:N_RUN,E19:(n)=>nOf(n,"рывок","рывка","рывков"),
   E22:N_TRY,E23:(n)=>nOf(n,"круг","круга","кругов"),E24:N_REP,
   E29:(n)=>nOf(n,"серия","серии","серий"),
-  E26:(n)=>nOf(n,"отрезок","отрезка","отрезков"),E27:N_REP,
+  E30:N_REP,E27:N_REP,
   E03:(n)=>nOf(n,"вариант","варианта","вариантов"),
   E28:(n)=>nOf(n,"удар","удара","ударов")};
 // Число отрезков интервального упражнения у игрока.
-function intervalReps(ex,pl){
-  return e26Series(pl).reduce((a,b)=>a+b,0);
-}
-// Серий «Прямоугольника» у игрока: в облегчённом одна вместо двух.
-function rectSeries(pl){ return isLight(pl)?E29_LIGHT_SERIES:E29_SERIES[pl]; }
-// Серии «Интервалов с мячом»: в облегчённом одна серия вместо двух.
-function e26Series(pl){ return (isLight(pl)?E26_LIGHT_SERIES:E26_SERIES)[pl]; }
 /* «Отрыв» (E15): три забега подряд, деления на части нет с 19.08. Часть 1
    (пять забегов на лучшее время) убрана — такое же ведение с ударом уже
    есть во вторник в «Ведении и ударе». Остались забеги, по которым
@@ -607,7 +598,7 @@ const MODE2_MATRIX={
   TUE:["Повторные рывки",[["E17",5,5],["E04",12,9],["E19",22,15],["E05",12,9]]],
   WED:["Агилити и техника бега",[["E03",10,7],["E22",12,9],["E23",12,7],["E14",15,10]]],
   THU:["Скорость и смена направления",[["E18",11,9],["E07",19,13],["E29",17,9],["E28",10,7]]],
-  FRI:["Игровая выносливость",[["E15",10,7],["E26",17,10],["E27",12,7],["E13",18,13]]],
+  FRI:["Игровая выносливость",[["E15",10,7],["E30",15,9],["E27",12,7],["E13",18,13]]],
 };
 const DAY_MATRIX={1:MODE1_MATRIX,2:MODE2_MATRIX};
 // Контрольный день: состав не меняется, облегчённого режима в нём нет.
@@ -689,7 +680,6 @@ function plannedReps(ex,spec,pl){
   if(ex==="E23")return isLight(pl)?LIGHT_REPS.E23:E23_ROUNDS;
   if(ex==="E22")return isLight(pl)?lightReps("E22",pl):repsCount("E22",pl);
   if(ex==="E28")return shotsPerSub("E28",pl);
-  if(ex==="E26")return e26Series(pl).reduce((a,b)=>a+b,0);
   const plan=repsFor(ex,spec);
   return (plan[pl]||[]).length;
 }
@@ -734,7 +724,7 @@ const MARKUP_SNIPPET = {
   E23:()=>`Отрезок ${E23_LEG_M} м, фишки на старте и на финише, обратно шагом.\nКруг = ${E23_DRILLS.length} упражнений подряд по ${E23_LEG_M} м; всего ${nOf(E23_ROUNDS,"круг","круга","кругов")}, между ними отдыха нет.\nОба одновременно, замера нет.`,
   E24:()=>`Три фишки: старт, вторая через ${DIST.E24.DANIIL} м (Адриану ${DIST.E24.ADRIAN} м), третья в ${E24_BACK_M} м за спиной от старта.\nТы у третьей фишки. Отдых ${REST.E24} сек.`,
   E29:()=>`Четыре фишки прямоугольником ${E29_SHORT_M} × ${E29_LONG_M} м, один на двоих.\nКороткие стороны ${E29_SHORT_M} м — ускорение, длинные ${E29_LONG_M} м — трусца, по кругу без остановки.\n${nOf(E29_LAPS,"круг","круга","кругов")} в серии; Даниилу ${nOf(E29_SERIES.DANIIL,"серия","серии","серий")}, Адриану ${E29_SERIES.ADRIAN}.\nБегут по очереди, ты у стартовой фишки с секундомером.`,
-  E26:()=>`Две фишки в ${E26_LEG_M.DANIIL} м друг от друга (Адриану ${E26_LEG_M.ADRIAN} м), у каждого своя пара. Ворота не нужны.\n${E26_WORK_SEC} сек ведения челноком и ${E26_REST_SEC} сек отдыха стоя, две серии через ${E26_BREAK_SEC/60} мин.\nСчитаем целиком пройденные отрезки; ты сбоку, видишь обе фишки.`,
+  E30:()=>`${E30_CONES} фишки треугольником, сторона ${E30_SIDE_M} м; игрок в центре, центр в ${E30_CENTER_M} м от ворот.\nТы на углу штрафной: Даниилу ${E30_COACH_M.DANIIL} м от линии ворот, Адриану ${E30_COACH_M.ADRIAN} м. Накат ${E30_PASS_M.DANIIL} / ${E30_PASS_M.ADRIAN} м.\n${E30_SUBS.map(x=>x.reps).join(" + ")} повторов: сперва ${E30_SUBS[0].side}, потом ${E30_SUBS[1].side}. Отдых ${E30_REST_SEC} сек.`,
   E27:()=>`Три фишки в линию через ${DIST.E27.DANIIL} м (Адриану ${DIST.E27.ADRIAN} м), старт от средней.\nВорота в ${E27_GOAL_M.DANIIL} м от линии (Адриану ${E27_GOAL_M.ADRIAN} м), ты у ворот. Отдых ${REST.E27} сек.`,
   E28:()=>`Мяч лежит: Даниил бьёт с ${E28_RANGE.DANIIL}, Адриан с ${E28_RANGE.ADRIAN}. Ты в воротах.\nПо ${E28_SHOTS} ударов, отдыха между ударами нет — бьют по очереди.`,
   E17:(spec)=>`${N_TRY(repsOf("E17","DANIIL",spec))} каждому по ${E17_JUMPS.DANIIL}/${E17_JUMPS.ADRIAN} прыжка.\nТот же коридор ${DIST.E17.DANIIL} м, что у «Стартов» — фишки ставятся один раз.\nЗамер только бега после последнего прыжка, отдых ${REST.E17} сек.`,
@@ -1516,40 +1506,42 @@ E29:{ name:"Прямоугольник", type:"time", attemptWord:"серия", 
         ADRIAN:`${nOf(E29_SERIES.ADRIAN,"серия","серии","серий")} по ${nOf(E29_LAPS,"круг","круга","кругов")} — тот же прямоугольник и то же число кругов, объём меньше по возрасту.`},
   rec:"Время каждой серии. Показатель занятия — лучшее время серии; процент падения не выводится, его надёжность низка.",
 },
-E26:{ name:"Челночные интервалы с мячом", type:"intervals",
-  work:()=>E26_WORK_SEC, restSec:()=>E26_REST_SEC, ball:true, series:true,
-  shuttle:true,
-  setup:()=>`Две фишки в ${E26_LEG_M.DANIIL} метрах друг от друга (Адриану ${E26_LEG_M.ADRIAN} м) — у каждого своя пара.\nИгрок с мячом у первой фишки. Ворота не нужны.\nТы сбоку, видишь обе фишки.`,
-  svg:()=>{const x0=70, x1=240;
+E30:{ name:"Треугольник и удар", type:"time_goal", subs:E30_SUBS,
+  setup:()=>`${E30_CONES} фишки равносторонним треугольником, сторона ${E30_SIDE_M} метра, пронумерованы 1-${E30_CONES} — номера видны игроку.\nИгрок стоит В ЦЕНТРЕ треугольника, центр в ${E30_CENTER_M} метрах от ворот (обоим).\nТы на углу штрафной, на пересечении линии штрафной и боковой: Даниилу ${E30_COACH_M.DANIIL} м от линии ворот, Адриану ${E30_COACH_M.ADRIAN} м.`,
+  /* Треугольник маленький, а ворота и тренер далеко — рисуем не в масштабе:
+     фигуру крупно, ворота поперёк движения сверху, обе позиции тренера
+     по углам штрафной. Иначе три метра слиплись бы в точку. */
+  svg:()=>{const cx=150, cy=112, r=40;
+    const p1=[cx-r,cy-18], p2=[cx+r,cy-18], p3=[cx,cy+30];
     return svg(
-      cone(x0,80)+cone(x1,80)+
-      player(x0,80,"")+ball(x0+12,86)+
-      arrow(x0+12,62,x1-10,62)+
-      arrow(x1-10,100,x0+12,100)+
-      lblC(150,48,"челноком с мячом, разворот у фишки")+
-      dim(x0,124,x1,`${E26_LEG_M.DANIIL} м (Адриану ${E26_LEG_M.ADRIAN})`)+
-      lblC(150,152,`${E26_WORK_SEC} сек ведения, ${E26_REST_SEC} сек стоя`)+
-      coach(150,26,"ТЫ"));},
-  steps:(spec)=>[`${E26_WORK_SEC} секунд ведения ЧЕЛНОКОМ между фишками: добежал до дальней, развернулся с мячом, обратно, снова разворот.`,
-    "Считаешь, сколько отрезков прошёл ЦЕЛИКОМ. Неполный отрезок не считается.",
-    `${E26_REST_SEC} секунд отдыха стоя на месте — возвращаться некуда.`,
-    "Разбито на серии: "+PLAYERS.map(pl=>`${RU[pl]} `+e26Series(pl).join(" и ")).join(", ")+`. Между сериями ${E26_BREAK_SEC/60} минуты.`,
-    `Оба работают одновременно, каждый на своей паре фишек: у Даниила ${E26_LEG_M.DANIIL} м, у Адриана ${E26_LEG_M.ADRIAN} м.`,
-    "Удара нет: завершение в пятнице уже есть в «Отрыве» и «Челноке с мячом».",
-    "Показатель — падение от первого интервала к последнему.",
-    INTERVAL_RANGE_NOTE],
-  reps_text:(spec)=>`${PLAYERS.map(pl=>`${RU[pl]}: ${e26Series(pl).join(" + ")} = ${N_REP(intervalReps("E26",pl))}, отрезок ${E26_LEG_M[pl]} м`).join("\n")}\n${E26_WORK_SEC} сек ведения челноком и ${E26_REST_SEC} сек стоя, между сериями ${E26_BREAK_SEC/60} мин.\nПишем число целиком пройденных отрезков, приложение переводит в метры.`,
-  rangeNote:true,
-  why:`Прямой вариант был неисполним: за ${E26_WORK_SEC} секунд игрок уходит на 60-90 метров, а обратно шагом идёт минуту, не пятнадцать секунд. Челнок даёт ту же работу без возврата — отдых честный, и разворот с мячом ближе к матчу.`,
-  smotri:"Разворот с мячом на опорной ноге, мяч не убегает за фишку. Первые два шага после разворота ускоряющие.",
-  oshibka:"Широкий разворот по дуге, мяч выкатывается за фишку.",
-  pravilno:"Разворот в одно движение, мяч разворачивается вместе с игроком.",
-  match:"Контроль мяча с разворотами на уставших ногах — то, что происходит в конце тайма.",
-  // diff читается как готовая строка, поэтому берём базовый план серий,
-  // а не e26Series: та смотрит в S, которого при сборке EX ещё нет.
-  diff:{DANIIL:`Отрезок ${E26_LEG_M.DANIIL} м, ${E26_SERIES.DANIIL.join(" + ")} интервалов.`,
-        ADRIAN:`Отрезок ${E26_LEG_M.ADRIAN} м, ${E26_SERIES.ADRIAN.join(" + ")} интервалов.`},
-  rec:"Число целиком пройденных отрезков за интервал; приложение переводит в метры.",
+      goalH(cx,14)+
+      cone(p1[0],p1[1])+lblC(p1[0]-14,p1[1]+4,"1")+
+      cone(p2[0],p2[1])+lblC(p2[0]+14,p2[1]+4,"2")+
+      cone(p3[0],p3[1])+lblC(p3[0]-14,p3[1]+4,"3")+
+      player(cx,cy,"центр")+
+      dim(p1[0],p1[1]-24,p2[0],`${E30_SIDE_M} м`)+
+      lblR(p1[0]-8,cy+12,`${E30_SIDE_M} м`)+
+      lbl(p2[0]+8,cy+12,`${E30_SIDE_M} м`)+
+      coach(30,52,"ТЫ")+coach(270,52,"ТЫ")+
+      arrow(42,58,cx-12,cy-4)+arrow(258,58,cx+12,cy-4)+
+      lblC(cx,168,`накат низом с угла штрафной, до ворот ${E30_CENTER_M} м`));},
+  steps:(spec)=>[`Игрок стоит в центре треугольника. Ты называешь номер — он бежит к фишке, касается рукой и возвращается в центр СПИНОЙ ВПЕРЁД.`,
+    "Сразу называешь второй номер — то же самое: к фишке, касание, спиной в центр.",
+    "После возврата со второй фишки даёшь пас НИЗОМ, накатом под удар. Удар в ОДНО КАСАНИЕ.",
+    `Номера называешь в момент старта и меняешь каждый повтор: комбинаций девять, маршрут заучить нельзя.`,
+    `${N_REP(repsCount("E30","DANIIL"))} каждому: `+E30_SUBS.map(x=>`${x.reps} ${x.side}`).join(", ")+". Счёт по углам раздельный.",
+    `Отдых ${REST.E30} секунд между своими повторами, чередование обычное: один работает, второй отдыхает.`,
+    "СЕКУНДОМЕР: пуск на твоей команде, стоп на ударе. Реакция на команду входит в замер — это часть упражнения."],
+  reps_text:(spec)=>`${N_REP(repsOf("E30","DANIIL",spec||S.spec))} каждому: `+E30_SUBS.map(x=>`${x.reps} ${x.side}`).join(", ")+`.\nСторона треугольника ${E30_SIDE_M} м, центр в ${E30_CENTER_M} м от ворот. Отдых ${REST.E30} сек.\nВремя каждого повтора и гол, углы считаются раздельно.`,
+  watchNote:"Пуск — твоя команда. Стоп — удар.",
+  why:`От центра до фишки около 1.7 метра — два шага туда, два обратно спиной. Разгона нет, работают стопы и корпус. При стороне пять метров начался бы разбег, и упражнение поехало бы в сторону челнока, который в этом дне уже есть.`,
+  smotri:"Спиной вперёд идёт действительно спиной, не боком и не разворачиваясь. Возвращается точно в центр, а не мимо. Удар в одно касание, без подработки.",
+  oshibka:"Разворачивается лицом при движении назад. Не доходит до центра и стартует ко второй фишке с полпути. Подрабатывает мяч перед ударом.",
+  pravilno:"От команды до удара ни одной лишней остановки.",
+  match:"Реакция на неизвестную заранее команду, работа стоп в тесноте, движение спиной вперёд — это возврат в оборону и открывание под пас. Плюс удар в одно касание с наката сбоку: самый частый гол центрального нападающего.",
+  diff:{DANIIL:`Полноразмерное поле: угол штрафной в ${E30_COACH_M.DANIIL} м от линии ворот, накат ${E30_PASS_M.DANIIL} м.`,
+        ADRIAN:`Поле 8×8 на половине: угол в ${E30_COACH_M.ADRIAN} м от линии ворот, накат ${E30_PASS_M.ADRIAN} м.`},
+  rec:"Время каждого повтора и гол, отдельно с правого и с левого угла.",
 },
 E28:{ name:"Удары с места", type:"shots", subs:E28_SUBS,
   shotsWord:"ударов", shotsVerb:"забил",
@@ -1625,11 +1617,12 @@ function lightTrim(code,R){
     const n=lightReps(code,pl);
     // «Разворот на 180°» режется поровну по подсериям: иначе облегчённый
     // вариант остался бы только на одну сторону.
-    if(code==="E24"){
+    if(code==="E24"||code==="E30"){
       // Три повтора делятся как 2 + 1: нечётное число на две стороны ровно
       // не ложится, лишний отдаём первой.
-      const base=Math.floor(n/E24_SUBS.length), extra=n%E24_SUBS.length, out=[];
-      E24_SUBS.forEach((sub,i)=>{ out.push(...(R[pl]||[])
+      const subs=(code==="E24")?E24_SUBS:E30_SUBS;
+      const base=Math.floor(n/subs.length), extra=n%subs.length, out=[];
+      subs.forEach((sub,i)=>{ out.push(...(R[pl]||[])
         .filter(sl=>sl.variant===sub.v).slice(0,base+(i<extra?1:0))); });
       R[pl]=out.map((sl,i)=>Object.assign({},sl,{attempt_no:i+1}));
       return;
@@ -1710,6 +1703,17 @@ function repsFor(code,spec){
       slot(pl,"E29","",E29_SERIES_M,i+1,E29_BREAK_SEC,{noStop:true,sloppy:true}));
     push("DANIIL",e29("DANIIL")); push("ADRIAN",e29("ADRIAN"));
     return R;                       // объём уже по игроку, срезать нечего
+  } else if(code==="E30"){
+    /* Две подсерии по пять: сперва тренер накатывает с правого угла,
+       потом с левого. Счёт по углам раздельный, стоп-правила нет —
+       время сильно зависит от того, какие номера назвали, и серия
+       обрывалась бы на ровном месте. */
+    const e30=(pl)=>{const out=[]; let n=0;
+      E30_SUBS.forEach(sub=>{ for(let i=0;i<sub.reps;i++)
+        out.push(slot(pl,"E30",sub.v,E30_CENTER_M,++n,REST.E30,
+                      {goal:true,noStop:true})); });
+      return out;};
+    push("DANIIL",e30("DANIIL")); push("ADRIAN",e30("ADRIAN"));
   } else if(code==="E27"){
     const e27=(pl)=>Array.from({length:repsCount("E27",pl)},(_,i)=>
       slot(pl,"E27","",DIST.E27[pl],i+1,REST.E27,{goal:true}));
@@ -1728,8 +1732,6 @@ function loadAttempts(){return JSON.parse(localStorage.getItem("trening_attempts
 function saveAttempts(a){localStorage.setItem("trening_attempts",JSON.stringify(a));}
 function records(){return JSON.parse(localStorage.getItem("trening_records")||"{}");}
 function pctRecords(){return JSON.parse(localStorage.getItem("trening_pct")||"{}");}
-// Рекорды дистанции интервальных упражнений (среднее за занятие).
-function distRecords(){return JSON.parse(localStorage.getItem("trening_dist")||"{}");}
 
 /* РЕКОРДЫ. Приложение считает их САМО по своей истории в localStorage:
    слепок «Импорт рекордов» тренер вставляет уже после занятия, и на экране
@@ -2317,7 +2319,6 @@ function startWork(st){
   if(e.type==="four")return workFour(st);
   if(e.type==="drills")return workDrills(st);
   if(e.type==="star")return workStar(st);
-  if(e.type==="intervals")return workIntervals(st);
   if(e.type==="breakaway")return startMeasure(st);
   return startMeasure(st); // time, time_goal
 }
@@ -2500,156 +2501,6 @@ function starRest(cur){
 }
 function starSkipRest(){ stopCountdown();
   const t=S.star; t.readyAt[t.order[t.pos].player]=Date.now(); starAdvance(); }
-
-/* Интервалы: оба брата работают ОДНОВРЕМЕННО, поэтому чередования нет —
-   приложение ведёт таймер работа/шаг и считает отрезки. Число отрезков
-   у братьев разное: у кого они кончились, тот идёт шагом.
-
-   МЕРИТСЯ ДИСТАНЦИЯ, а не время: за фиксированные 30 (или 15) секунд игрок
-   пробегает столько, на сколько хватает темпа. Сразу после сигнала конца
-   работы приложение показывает экран ввода на каждого игрока — тренер
-   успевает записать обоих, пока идёт отдых: отдых отсчитывается от МОМЕНТА
-   КОНЦА РАБОТЫ, а не от закрытия экрана ввода.
-   Ручного запуска в программе больше нет: он был только у «Интервалов
-   30-30», а они сняты 03.09. */
-function workIntervals(st){
-  const e=EX[st.ex];
-  const series={}; blockPlayers(st.ex).forEach(pl=>{
-    series[pl]=e.series?e26Series(pl):[intervalReps(st.ex,pl)];});
-  const maxSeries=Math.max(1,...Object.values(series).map(x=>x.length));
-  S.iv={ex:st.ex,series,maxSeries,s:0,leg:0,phase:"work",restFrom:0};
-  ivRender();
-}
-// Сколько отрезков в этой серии у самого «длинного» игрока.
-function ivLegs(iv,s){
-  return Math.max(0,...Object.values(iv.series).map(x=>x[s]||0));
-}
-// Игроки, у которых этот отрезок ещё есть.
-function ivPlayers(iv){
-  return PLAYERS.filter(pl=>(iv.series[pl]||[])[iv.s]>iv.leg&&!isSkipped(pl));
-}
-function ivRender(){
-  const iv=S.iv, e=EX[iv.ex];
-  const legs=ivLegs(iv,iv.s);
-  if(iv.leg>=legs) return ivNextSeries();
-  const work=iv.phase==="work";
-  const sec=work?e.work():e.restSec();
-  // Отдых считается от конца работы: ввод дистанции идёт внутри него.
-  const target=(work?Date.now():(iv.restFrom||Date.now()))+sec*1000;
-  const who=ivPlayers(iv).map(pl=>RU[pl]).join(" и ");
-  h(`<h1>${e.name}</h1>
-    <div class="card center">
-      <div class="sub">${iv.maxSeries>1?`серия ${iv.s+1} из ${iv.maxSeries} · `:""}отрезок ${iv.leg+1} из ${legs}</div>
-      <div class="name" style="font-size:26px">${work?(e.ball?"ВЕДЕНИЕ":"БЕГ"):"ШАГОМ"}</div>
-      <div class="big" id="rc"></div>
-      <div class="note">${work?(e.ball?`${sec} секунд на высокой скорости`
-                                      :`${sec} секунд на ~80% от максимума, не спринт`)
-                              :`${sec} секунд ${e.shuttle?"отдыха стоя — возвращаться некуда"
-                                  :(e.ball?"шагом с мячом":"шагом обратно к старту")}`}</div>
-      ${who?`<div class="note">Работают: ${who}</div>`:""}
-      ${work?`<div class="note">${e.shuttle?"По сигналу останавливаются, считаем целиком пройденные отрезки."
-                                           :"По сигналу останавливаются там, где добежали."}</div>`:""}
-    </div>
-    <div class="row"><button class="go" onclick="ivNext()">Дальше</button></div>
-    ${smallActions()}`);
-  countdownTo(target,"rc",()=>ivNext(),{warnFrom:INTERVAL_WARN_SEC});
-}
-function ivNext(){ stopCountdown();
-  const iv=S.iv;
-  if(iv.phase==="work"){
-    // Работа кончилась: с этого момента идёт отдых, а тренер вводит метры.
-    iv.restFrom=Date.now(); iv.asked={};
-    iv.phase="ask"; saveSession(); return ivAsk();
-  }
-  iv.phase="work"; iv.leg++; saveSession(); ivRender();
-}
-/* Ввод результата отрезка — по одному игроку за раз. Дистанция по фишкам;
-   на финише серии вместо неё гол. */
-function ivAsk(){
-  const iv=S.iv, e=EX[iv.ex];
-  const left=ivPlayers(iv).filter(pl=>!(iv.asked||{})[pl]);
-  if(!left.length){ iv.phase="rest"; saveSession(); return ivRender(); }
-  // Отрезков у братьев разное число — считаем по СВОЕЙ серии игрока.
-  const pl=left[0], legs=(iv.series[pl]||[])[iv.s]||0;
-  const head=`${countHeader(pl,e.name+lightTag(pl),legs,"отрезков",iv.leg)}
-    <div class="title">${RU[pl]} · интервал ${iv.leg+1} из ${legs}</div>`;
-  // ЧЕЛНОК: вводится число целиком пройденных отрезков, метры считает
-  // приложение. Прямой вариант вводит дистанцию по фишкам.
-  if(e.shuttle){
-    const opts=INTERVAL_LEGS[iv.ex]||[];
-    return h(`${head}
-      <div class="title">Сколько отрезков?</div>
-      <div class="grid4">${opts.map(n=>`<button onclick="ivLegsSave('${pl}',${n})">${n}</button>`).join("")}</div>
-      <div class="note">Неполный отрезок не считается — только пройденное
-      целиком расстояние между фишками (${E26_LEG_M[pl]} м).</div>
-      ${smallActions()}`);
-  }
-  const marks=INTERVAL_MARKS[iv.ex]||[];
-  h(`${head}
-    <div class="title">До какой фишки добежал?</div>
-    <div class="grid4">${marks.map(m=>`<button onclick="ivDistSave('${pl}',${m})">${m}</button>`).join("")}</div>
-    <div class="note">Остановился между фишками — округляй до ближайшей.</div>
-    ${EX[iv.ex].rangeNote?`<div class="note">${INTERVAL_RANGE_NOTE}</div>`:""}
-    ${smallActions()}`);
-}
-// Отрезки челнока → метры: приложение считает само, тренер вводит счёт.
-function ivLegsSave(pl,legs){
-  ivDistSave(pl,shuttleMetres(pl,legs),legs);
-}
-function ivDistSave(pl,m,legs){
-  const iv=S.iv;
-  // Номер попытки сквозной по упражнению: серии идут подряд.
-  // У челнока в заметке остаётся сам счёт отрезков: метры из него
-  // считаются, но проверить ввод потом можно только по нему.
-  const note=(legs!==undefined)?`${legs} отрезков`:"";
-  pushAttempt({player:pl,ex:iv.ex,variant:"",attempt_no:ivAttemptNo(iv,pl),
-    dist:m,time_sec:null,note});
-  iv.asked=iv.asked||{}; iv.asked[pl]=true;
-  saveSession(); ivAsk();
-}
-// Сквозной номер отрезка через все серии: 6 + 6 → 1..12.
-function ivAttemptNo(iv,pl){
-  const before=(iv.series[pl]||[]).slice(0,iv.s).reduce((a,b)=>a+b,0);
-  return before+iv.leg+1;
-}
-function ivNextSeries(){
-  const iv=S.iv;
-  iv.s++; iv.leg=0; iv.phase="work";
-  if(iv.s>=iv.maxSeries){ delete S.iv; saveSession(); return nextStep(); }
-  const target=Date.now()+E26_BREAK_SEC*1000;
-  h(`<h1>Перерыв между сериями</h1>
-    <div class="card center"><div class="sub">до</div>
-      <div class="big">${hhmmss(new Date(target))}</div>
-      <div class="big" id="rc"></div>
-      <div class="note">${E26_BREAK_SEC/60} минуты. Дальше серия ${iv.s+1} из ${iv.maxSeries}.</div></div>
-    <div class="row"><button class="go" onclick="stopCountdown();ivRender()">Готово</button></div>
-    ${smallActions()}`);
-  countdownTo(target,"rc",()=>{stopCountdown();ivRender();});
-}
-
-/* Ввод длинного времени. parseTime здесь не годится: он делит «138» на сто
-   по правилу «206 → 2.06», нужному на стартах, и минуты превратились бы
-   в секунды. Разбираем по двоеточию и по величине числа:
-     «3:39»   → 219   двоеточие — это минуты и секунды;
-     «219.2»  → 219.2 точка — это секунды с долями;
-     «339»    → 219   голое число от ста: последние две цифры — секунды,
-                      если их меньше шестидесяти (339 = 3 мин 39 с);
-     «175»    → 175   «:75» не бывает, значит это просто секунды;
-     «45»     → 45    меньше ста — секунды.
-   Возвращаем ВСЕГДА секунды числом: в записи и в выгрузку идёт оно. */
-function parseSeriesTime(str){
-  const t=(str||"").trim().replace(",",".");
-  if(!t)return null;
-  if(t.indexOf(":")>=0){ const p=t.split(":");
-    const v=Number(p[0])*60+Number(p[1]); return isNaN(v)?null:v; }
-  const v=parseFloat(t);
-  if(isNaN(v))return null;
-  if(t.indexOf(".")<0&&v>=100){
-    const sec=v%100;
-    if(sec<60)return Math.floor(v/100)*60+sec;
-  }
-  return v;
-}
 
 /* ---- Измеряемые упражнения (time / time_goal / breakaway) ---- */
 function startMeasure(st){
@@ -2839,6 +2690,29 @@ function tapWatch(){
   }
 }
 function notMeasured(){recordTime(null,true);}
+/* Ввод длинного времени. parseTime здесь не годится: он делит «138» на сто
+   по правилу «206 → 2.06», нужному на стартах, и минуты превратились бы
+   в секунды. Разбираем по двоеточию и по величине числа:
+     «3:39»   → 219   двоеточие — это минуты и секунды;
+     «219.2»  → 219.2 точка — это секунды с долями;
+     «339»    → 219   голое число от ста: последние две цифры — секунды,
+                      если их меньше шестидесяти (339 = 3 мин 39 с);
+     «175»    → 175   «:75» не бывает, значит это просто секунды;
+     «45»     → 45    меньше ста — секунды.
+   Возвращаем ВСЕГДА секунды числом: в записи и в выгрузку идёт оно. */
+function parseSeriesTime(str){
+  const t=(str||"").trim().replace(",",".");
+  if(!t)return null;
+  if(t.indexOf(":")>=0){ const p=t.split(":");
+    const v=Number(p[0])*60+Number(p[1]); return isNaN(v)?null:v; }
+  const v=parseFloat(t);
+  if(isNaN(v))return null;
+  if(t.indexOf(".")<0&&v>=100){
+    const sec=v%100;
+    if(sec<60)return Math.floor(v/100)*60+sec;
+  }
+  return v;
+}
 function longTimeNow(){
   const m=S&&S.measure, cur=m&&m.order[m.pos];
   return !!(cur&&exOf(cur.ex)&&exOf(cur.ex).longTime);
@@ -3333,9 +3207,14 @@ const LOST_LABEL={E12:"Не ушёл",E14:"Не обыграл"};
 function lostLabel(ex){ return LOST_LABEL[ex]||"Потерь мяча"; }
 /* Разбивка «Разворота» по сторонам — ради неё подсерии и разделены:
    в общем проценте слабая сторона не видна (dupl. bot/insights.py). */
+/* Разбивка по подсериям: «Разворот» считает стороны за спиной, а
+   «Треугольник и удар» — угол подачи. И там и там слабая сторона тонет
+   в общем проценте, поэтому строка выводится отдельно. */
+const SIDE_SUBS={E07:()=>E07_SUBS, E30:()=>E30_SUBS};
 function sidesLine(ex,list,player){
-  if(ex!=="E07")return [];
-  const parts=E07_SUBS.map(sub=>{
+  const subsOfEx=SIDE_SUBS[ex];
+  if(!subsOfEx)return [];
+  const parts=subsOfEx().map(sub=>{
     const t=goalsOf(list.filter(a=>(a.variant||"")===sub.v));
     if(!t.s)return null;
     return `${sub.side} ${pctTxt(t.g,t.s)}${pctTail(ratioRecord(player,ex,S.spec.iso,sub.v))}`;
@@ -3372,7 +3251,8 @@ function pureTimeLines(ex,list,player){
   return out;
 }
 function timeGoalChunk(e,list,player){
-  const rec=timeRecord(player,list[0].exercise_id,list[0].variant,S.spec.iso);
+  const ex=list[0].exercise_id;
+  const rec=timeRecord(player,ex,list[0].variant,S.spec.iso);
   const pctRec=ratioRecord(player,list[0].exercise_id,S.spec.iso);
   const lines=[], s=statsTxt(list,true,rec), t=goalsOf(list);
   if(s){ lines.push(s); recordLines(list,rec).forEach(x=>lines.push(x)); }
@@ -3380,63 +3260,12 @@ function timeGoalChunk(e,list,player){
   // рывка к последнему — приложение считает его само (dupl. bot/insights.py).
   if(e.fade)fadeLines(list).forEach(x=>lines.push(x));
   if(t.s){ lines.push(`Голы: ${pctTxt(t.g,t.s)}${pctTail(pctRec)}`);
+    // Подсерии считаются раздельно: у «Треугольника» это углы подачи.
+    sidesLine(ex,list,player).forEach(x=>lines.push(x));
     pctRecordLines(t.g,t.s,pctRec).forEach(x=>lines.push(x)); }
   const lost=list.filter(a=>a.lost).length;
   if(lost>0)lines.push(`Потерь мяча: ${lost}`);
   return {h:e.name,lines};
-}
-/* Интервальные упражнения: мерится ДИСТАНЦИЯ за отрезок. Показатель —
-   падение первого интервала к последнему; рекорд — лучшее СРЕДНЕЕ
-   за занятие, больше лучше (dupl. bot/insights._interval_chunk). */
-function intervalDists(list){
-  return list.slice().sort((a,b)=>a.attempt_no-b.attempt_no)
-    .filter(a=>a.distance_m!==null&&a.distance_m!==undefined)
-    .map(a=>a.distance_m);
-}
-function intervalFade(dists){
-  if(dists.length<2)return null;
-  const drop=dists[0]-dists[dists.length-1];
-  // Округление ВНИЗ: 12.5% показываем как 12 — падение не приукрашиваем
-  // в большую сторону (dupl. bot/insights.interval_fade).
-  const pct=dists[0]?Math.floor(100*drop/dists[0]):0;
-  const key=pct<=INTERVAL_FADE_GOOD?"hold":pct<=INTERVAL_FADE_BAD?"edge":"fade";
-  return {drop:Math.round(drop*10)/10,pct,key};
-}
-// Рекорд дистанции — лучшее среднее за занятие из локальной истории.
-function distRecord(player,ex,day){
-  const byDay={};
-  historyBefore(player,ex,day).forEach(a=>{
-    if(a.distance_m===null||a.distance_m===undefined||a.is_warmup)return;
-    const d=byDay[a.date]=byDay[a.date]||{sum:0,n:0};
-    d.sum+=a.distance_m; d.n++;});
-  const avgs=Object.values(byDay).filter(d=>d.n).map(d=>d.sum/d.n);
-  const snap=snapRecord(distRecords()[player],ex,undefined,modeOf(player));
-  if(snap!==undefined&&snap!==null)avgs.push(snap);
-  return avgs.length?Math.max(...avgs):null;
-}
-function mTxt(v){ return (v===null||v===undefined)?"—":`${Math.round(v)} м`; }
-function intervalChunk(e,list,player){
-  const lines=[], dists=intervalDists(list);
-  if(dists.length){
-    // МЕТРИКА «БОЛЬШЕ — ЛУЧШЕ»: лучший интервал это МАКСИМУМ, и среднее
-    // по определению не может его превысить. Рекорд — лучшее СРЕДНЕЕ
-    // за занятие, поэтому подписан «рекорд среднего».
-    const best=Math.max(...dists);
-    const avg=dists.reduce((a,b)=>a+b,0)/dists.length;
-    const rec=distRecord(player,list[0].exercise_id,S.spec.iso);
-    lines.push(`Первый ${mTxt(dists[0])}, последний ${mTxt(dists[dists.length-1])}, `
-      +`лучший ${mTxt(best)}, среднее ${mTxt(avg)}`
-      +(rec===null?FIRST_MEASURE:`, рекорд среднего ${mTxt(rec)}`));
-    if(rec!==null&&Math.round(avg)>Math.round(rec))
-      lines.push("",`${NEW_RECORD} Прежнее среднее ${mTxt(rec)}, прибавка ${Math.round(avg)-Math.round(rec)} м`,"");
-    const f=intervalFade(dists);
-    if(f)lines.push(`Падение ${f.pct}% — ${INTERVAL_FADE_VERDICTS[f.key]}`);
-  }
-  const t=goalsOf(list);
-  if(t.s){ const pctRec=ratioRecord(player,list[0].exercise_id,S.spec.iso);
-    lines.push(`Голы на финише серий: ${pctTxt(t.g,t.s)}${pctTail(pctRec)}`);
-    pctRecordLines(t.g,t.s,pctRec).forEach(x=>lines.push(x)); }
-  return lines.length?{h:e.name,lines}:null;
 }
 // Падение времени в серии: первый рывок против последнего, с трактовкой.
 function fadeOf(list){
@@ -3524,8 +3353,6 @@ function summaryChunks(pl){
     const list=byEx[ex];
     if(ex==="E10"){ flush(); q=""; chunks.push(shotsChunk(list,shotsTotal(byEx),pl)); continue; }
     if(ex==="E15"){ flush(); q=""; breakawayChunks(list,pl).forEach(c=>chunks.push(c)); continue; }
-    if(e.type==="intervals"){ flush(); q="";
-      const c=intervalChunk(e,list,pl); if(c)chunks.push(c); continue; }
     const hasTime=scoringTimes(list).length>0;
     const hasGoals=list.some(a=>a.goals!==null&&a.goals!==undefined&&a.shots);
     if(hasTime&&hasGoals){ flush(); q=""; chunks.push(timeGoalChunk(e,list,pl)); continue; }
@@ -3655,9 +3482,6 @@ function applyImport(){
     // Рекорды по проценту попадания приходят тем же слепком (могут и не прийти).
     const p=pctRecords(); p[o.player]=o.pct||{};
     localStorage.setItem("trening_pct",JSON.stringify(p));
-    // И рекорды дистанции интервальных упражнений — среднее за занятие.
-    const dr=distRecords(); dr[o.player]=o.dist||{};
-    localStorage.setItem("trening_dist",JSON.stringify(dr));
     toast("Рекорды "+o.player+" сохранены.");
   }catch(e){toast("Не удалось прочитать слепок.");}
 }
@@ -3683,6 +3507,8 @@ function confirmReset(){
       <button class="ghost" onclick="closeOverlay()">Отмена</button></div></div>`);
 }
 function resetData(){
+  // trening_dist убран 04.09 вместе с последним упражнением, где мерилась
+  // дистанция: чистим ключ на всякий случай, если он остался с прошлых версий.
   ["trening_attempts","trening_records","trening_pct","trening_dist","trening_session","trening_hot","trening_copied"].forEach(k=>localStorage.removeItem(k));
   if(sessionTimer){clearInterval(sessionTimer);sessionTimer=null;} S=null;
   closeOverlay(); screenHome();
